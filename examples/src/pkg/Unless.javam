@@ -1,0 +1,10 @@
+package pkg;
+
+/**
+ * An if statement whose condition is negated.
+ */
+macro Unless as statement
+: "unless" expr:expression :block
+{
+  return `statement[ if (!(#expr[0])) #block[0] ]`;
+}

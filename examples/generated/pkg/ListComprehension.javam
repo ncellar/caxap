@@ -1,0 +1,24 @@
+package pkg;
+
+import my_util.ListComprehension;
+macro ListCompForClause called
+: "for" var:formalParameter "in" iter:expression ("if" cond:expression)? ;
+
+macro ListComprehension as primaryExpression
+: "[" type:referenceType :expression (forClauses:ListCompForClause)+ "]"
+{
+  Match accum = compiler.util.Quoter.dynamicQuote("statement", "list.add(#1);", (Object)expression[0]);
+
+  for (Match clause : forClauses)
+  {
+    Match[] cond = clause.getCaptures("cond");
+    
+    if (cond.length > 0) {
+      accum = compiler.util.Quoter.dynamicQuote("statement", "if (#1) { #2 }", (Object)cond[0], (Object)accum);
+    }
+    
+    accum = compiler.util.Quoter.dynamicQuote("statement", "for (#1 : #2) {\n  \t    #3 }", (Object)clause.getCaptures("var")[0], (Object)clause.getCaptures("iter")[0], (Object)accum);  
+  }
+  
+  return compiler.util.Quoter.dynamicQuote("primaryExpression", "(new my_util.ListComprehension<#1>() {\n      @Override public java.util.List<#2> getList() {\n        java.util.List<#3> list = new java.util.ArrayList<>();\n        #4 return list;\n      }\n    }.getList())", (Object)type[0], (Object)type[0], (Object)type[0], (Object)accum);
+}

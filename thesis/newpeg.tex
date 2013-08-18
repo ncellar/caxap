@@ -1,0 +1,1006 @@
+\chapter{Parsing Expression Grammars}
+\label{peg_intro}
+
+Parsing expression grammars (PEGs for short) are a variety of formal grammar
+used to specify recursive-descent parsers. They were introduced by Bryan Ford in
+2004. \cite{ford2004}
+
+In caxap, PEGs are used to define the Java syntax, as well as the syntax matched
+by user-defined macros.
+
+We introduce PEGs by exploring how they differ from context-free grammars
+(CFGs), as most computer scientists are familiar with CFGs, but not necessarily
+with PEGs. Both formalisms have a lot in common.
+
+The first section briefly reviews CFGs and important concepts related to
+formal grammars. Afterward we explain how to transition from CFGs to PEGs
+(section \ref{cfg_extension}) and explore the practical consequences of the
+differences between both formalisms (sections \ref{peg_implications} and
+\ref{further_comp}).
+
+Finally, we precisely define a minimal version of the PEG formalism (section
+\ref{peg_formalism}), then extend it to a richer notation
+(\ref{extended_notation}). We end with a look at PEG parsing (section
+\ref{parsing_peg}).
+
+We sometimes use the singular term \emph{PEG} to refer to the formalism
+specifying how PEGs work.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Context Free Grammars (CFGs)}
+\label{cfgs}
+
+This section briefly presents context-free grammars (CFGs), as well as some key
+ideas about formal grammars and parsing.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{CFG Basics}
+\label{cfg_basics}
+
+CFGs work with symbols. There are two kinds of symbols: terminals and
+nonterminals. The input - usually some text - is a sequence of terminals.
+Nonterminals, on the other hand, match a set of terminal sequences.
+
+The set of terminals is usually some well-known set of values such as the set of
+ASCII or UTF-8 characters, or a set of lexical tokens. In programming languages,
+lexical tokens are things like kewyords (\texttt{if}, \texttt{while}),
+identifiers (\texttt{my_variable}, \texttt{MyClass}), numbers ($3$, $3.14$) and
+punctuation (\texttt{[}, \texttt{]}, \texttt{;}).
+
+Nonterminals are defined by production rules. The left-hand side of a production
+rule is the nonterminal being defined; the right-hand side is a sequence of
+symbols (terminals and nonterminals both). We sometimes use \emph{rule name}
+instead of \emph{nonterminal}. For instance, \lstinline{A ::= xyz} is a rule
+saying that the nonterminal \texttt{A} matches a sequence of three terminals
+\texttt{x}, \texttt{y} and \texttt{z}. The empty sequence is a valid right-hand
+side.
+
+A nonterminal can match multiple sequences of symbols. There are two ways to
+express this: either you allow multiple rules to have the same nonterminal on
+the left; or you introduce a disjunction (choice) operator. Disjunction is often
+represented by the pipe character (\texttt{|}).
+For instance: [\lstinline{A ::= abc | xyz}] means \texttt{A} matches the
+\texttt{abc} sequence or the \texttt{xyz} sequence.
+
+Figure \ref{cfg_example} shows a CFG generating a simple algebraic language,
+using the disjunction operator.
+
+\begin{figure}
+\small
+\begin{lstlisting}[frame=single]
+S ::= A
+A ::= M * M | M / M | M
+M ::= ( S ) | x | y | z
+\end{lstlisting}
+\caption{Example context-free grammar (CFG). This grammar describes all
+  algebraic expressions using the variables $x$, $y$ and $z$. The starting
+  symbol is $S$.}
+\label{cfg_example}
+\end{figure}
+
+The symbol sequences matched by a nonterminal are not ordered. In other words,
+the choice operator is commutative. This means that when parsing, the order in
+which alternatives are tried does not matter. Consequently, it is possible for
+an input to be matched by a nonterminal in multiple ways. This is called
+\emph{ambiguity}. For instance, the rule \lstinline{A ::= a | Aa | aA} is
+ambiguous for the input \texttt{aa}, as it could be obtained by picking the
+second or third alternative. In fact, that rule is ambiguous for all the inputs
+it matches, except \texttt{a}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Extended Notations}
+
+We have now defined the minimal set of elements needed to write a context-free
+grammar. In practice, this minimal formalism is often extended to produce more
+expressive notations. The notations add new operators that can be reduced to the
+simple formalism. There are two main families of notations for CFGs. The first
+consists of the extended Backus-Naur Form \cite{iso14977} and derived
+notations. The second consists of notations derived from the traditional regular
+expression syntax. \cite{iso9945}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Generated Language \& Nonterminal Expansion}
+
+A production is said to \emph{generate} all possible terminal sequences matching
+its left-hand side. When a right-hand side contains nonterminals, they need to
+be \emph{expanded}. We do so by replacing each nonterminal by the sequence on
+the right-hand side of the rule defining it. If there is a choice, we pick a
+single alternative. After recursively expanding all nonterminals, we end up with
+a sequence of terminals matching the original nonterminal. Because of choices,
+there can be many such sequences. The set of all these sequences is the language
+generated by the nonterminal.
+
+A CFG includes a special nonterminal called \emph{starting symbol} or
+\emph{root}. A CFG is said to generate the language generated by its starting
+symbol.
+
+It is possible for the expansion of a nonterminal not to finish. This happens
+because the grammar contains an infinite loop (a recursion with no base
+case). The grammar is then said to be malformed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Parsing CFGs}
+\label{cfg_parsing}
+
+There are two main families of CFG parsers: top-down parsers and bottom-up
+parsers.
+
+Top-down parsers recursively traverse the grammar rules, from the starting
+symbol towards the terminals. Figure \ref{cfg_parse_pseudo} shows pseudo-code
+for a simple top-down parser. Famous top-down CFG parsing algorithms include
+LL(1), LL(k) and Earley.
+
+Bottom-up parsers, on the other hand, try to combine the terminals into rules,
+then to combine those rules into other rules, until the starting symbol is
+reached. Famous CFG bottom-up parsing algorithms include LR, LALR and GLR.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[language=C,frame=single]
+parse(symbols, input)
+{
+  if (symbols is empty) {
+    if (input is empty) {
+      return accept;
+    }
+    else {
+      return refuse;
+    }
+  }
+  else if (symbols.head is a terminal)
+    if (input is empty || input.head != symbols.head) {
+      return refuse;
+    }
+    else {
+      return parse(symbols.tail, input.tail);
+    }
+  }
+  else if (symbols.head is a nonterminal) {
+    for each alternative (symbols.head -> rhs) {
+      result = parse(rhs + symbols.tail, input);
+      if (result == accept) {
+        return accept;
+      }
+    }
+    return refuse;
+  }
+}
+parse(list(starting symbol), input);
+\end{lstlisting}
+\caption{Pseudo-code for a top-down recursive CFG parser. The algorithm parses
+  the input (a list of terminals) against a list of symbols (initially a list
+  containing only the starting symbol of the CFG). This algorithm was adapted
+  from a textbook written by Baudouin Le Charlier. \cite{lecharlier2012}}
+\label{cfg_parse_pseudo}
+\end{figure}
+
+Let's highlight two problems with the recursive top-down algorithm. First, a
+top-down recursive parser can't handle left-recursion in the grammar, which is
+however allowed by the CFG formalism. Left-recursion would cause our algorithm
+to recurse indefinitely without consuming any input.
+
+Second, we might have, at worse, to try every alternative of each
+nonterminal. This can lead to worse-case exponential running times for grammars
+with recursion.
+
+When a rule fails in a CFG parser, the algorithm tries the next alternative of
+the last rule encountered. If there are no more alternatives, then that rule
+fails itself. This process of going back to the previous rule and try out its
+next alternative is called \emph{backtracking}.
+
+Most practical CFG parsing algorithms restrict the grammars they are able to
+handle, in order to guarantee a certain worse-case complexity. The LL(1), LL(k),
+LR and LALR algorithms impose such restrictions, but are therefore able to parse
+the grammars they handle in linear time. The imposed restrictions are - in my
+own experience - highly unintuitive, and make constructing and debugging such
+CFGs a perilous exercise.
+
+The Earley and GLR algorithms can parse all CFGs in $O(n^3)$ and all unambiguous
+CFGs in $O(n^2)$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{PEG as a CFG Extension}
+\label{cfg_extension}
+
+PEGs are very close to CFGs, to the point where we can pinpoint two fundamental
+modifications to apply to the CFG formalism in order to obtain a minimal - but
+complete - version of the PEG formalism.
+
+This section explains these modifications, whereas the next section explores
+their consequences.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Ordered Choice and Single Parse Rule}
+\label{single_parse_rule}
+
+The first difference is that PEG's choice operator is ordered. A PEG parser will
+first try the first alternative of a PEG rule. If it succeeds, no other
+alternatives for the same rule will ever be tried at the same input
+position. For instance, assuming the rule [\texttt{A ::= a | aa}], the rule
+[\texttt{B ::= Ab}] will succeed for the input \texttt{aab} in a CFG, but fail
+in a PEG. Since the first alternative succeeds, the second one is never even
+tried.
+
+This entails what I call the \emph{single parse rule}: there is at most a single
+parse for a given nonterminal at a given input position.
+
+Contrast this with CFGs, where the result of parsing a given rule at a given
+position is a set of parses. Parses in the set can vary in the length of the
+matched input, or in expanded alternatives.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Lookahead Operators}
+\label{lookahead_operators}
+
+The second difference is that PEG has \emph{lookahead operators}, or
+\emph{syntactic predicates}. These operators allow us to peek ahead in the input
+without actually consuming any of it. There are two such predicates: the
+and-predicate and the not predicate.
+
+The rule [\texttt{A ::= \&a a}] features the and-predicate. It succeeds for
+input \texttt{a}. The predicate looks ahead to see if the terminal \texttt{a} is
+present and succeeds. Next, the \texttt{a} terminal on the right-hand side
+consumes the terminal from the input.
+
+The rule [\texttt{A ::= \&b ab}] features the not-predicate. It succeeds for
+input \texttt{ab}. The predicate looks ahead to make sure the terminal
+\texttt{b} is not present. It finds the terminal \texttt{a} instead and
+therefore succeeds. The two next terminals on the right-hand side consume the
+rest of the input.
+
+The and-predicate is actually the same as a double application of the not
+predicate: \texttt{!!a} is equivalent to \texttt{\&a}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Philosophical Differences}
+
+Despite the fact PEG can be derived from CFG with a two modification, the
+formalisms have deeper philosophical differences. PEGs are not generative: you
+can't expand all the nonterminals and get the set of matching sequences, because
+some of the alternatives might never be taken. Computing the generated language
+is also made more complex by the presence of lookahead operators. The original
+PEG paper \cite{ford2004} states ``A PEG may be viewed as a formal description
+of a top-down parser''. CFGs are centered on language generation, whereas PEGs
+are centered on language recognition.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Practical Implication of PEGs' Specificities}
+\label{peg_implications}
+
+The previous section presented the fundamental differences between CFGs and
+PEGs. This section examines the consequences of those differences, and how they
+translate into practical usage.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Ambiguity \& Language Hiding}
+\label{ambiguity}
+
+Because of ordered choice, PEGs cannot be ambiguous: the correct way to parse an
+input is always the first one that succeeds when trying alternatives from left
+to right.
+
+While PEGs eliminate ambiguity, ordering alternatives to express the desired
+language is not always easy.
+
+When building a PEG rule, we must be careful to order the alternatives such that
+no alternative A which can be a prefix of alternative B ends up before
+alternative B. If that happens, an input that matches alternative B will be
+parsed as alternative A instead, which is usually not what we want. I call this
+the \emph{language hiding problem}, an expression coined by Roman
+R. Redziejowski. \cite{redziejowski2009}.
+
+The canonical example of language hiding is the following PEG, with starting
+symbol \texttt{B}:
+
+\begin{lstlisting}
+A ::= a | aa
+B ::= Ab
+\end{lstlisting}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Left-Recursion}
+\label{peg_left_recur}
+
+The single parse rule forbids left-recursion: with left-recursion you have more
+than a single parse for the same nonterminal at the same input position. This is
+consistent with the fact that PEGs were conceived as formal descriptions of
+top-down parsers, which do not allow left-recursion.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Backtracking \& Greed}
+
+Section \ref{cfg_parsing} defines \emph{backtracking} in the context of CFG
+parsing. PEG parsers also backtrack, but less than their CFG counterpart. To
+understand the difference, we must distinguish between horizontal and vertical
+backtracking.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Horizontal \& Vertical Backtracking}
+
+In a CFG, horizontal backtracking occurs when the last rule was triggered by a
+nonterminal on the left of the failing symbol. Consider the CFG below, with
+input \texttt{aab} and starting symbol \texttt{B}. Assuming the first
+alternative is chosen for \texttt{A}, \texttt{B} will fail on the terminal
+\texttt{b}. This means that the next alternative of \texttt{A} will be
+tried. Because \texttt{A} appear to the left of \texttt{b}, this is an instance
+of horizontal backtracking.
+
+\begin{lstlisting}
+A ::= a | aa
+B ::= Ab | c
+\end{lstlisting}
+
+Vertical backtracking, on the other hand, occurs when the last rule is one of
+those through which the failing symbol was reaching. If you consider the
+previous grammar with input \texttt{c} and starting symbol \texttt{B}, then both
+alternatives of \texttt{A} will fail. Vertical backtracking will then be
+performed to try the second alternative of \texttt{B}.
+
+PEG forbids horizontal backtracking. It is a simple consequence of the single
+parse rule: if the symbol already has a valid parse, it cannot have another.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Greed}
+
+One particular consequence of the absence of horizontal backtracking is that
+PEGs are said to match greedily. If we have the rule \texttt{A ::= aA | a}, then
+the rule \texttt{B ::= Aa} will never succeed, because the nonterminal
+\texttt{A} will consume all available \texttt{a} terminals. With a sequence of
+\texttt{a} as input, the parsing algorithm will always pick the first
+alternative of the \texttt{A} rule, until the end of the input, where it will
+select the second alternative for the second to last expansion of
+\texttt{A}. Once \texttt{A} has been matched, the absence of horizontal
+backtracking means we cannot go back and \texttt{B} must fail because there is
+no more input to consume.
+
+Using a richer notation, the rule can be written as \texttt{B ::= a* a}, where
+the star (\texttt{*}) means ``zero or more of the thing preceding the
+star''. The star is the repetition operator. PEG is greedy because repetitions
+consume as much input as possible, even if consuming less might lead to a
+successful parse.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Scannerless Parsing}
+
+When parsing text, PEGs are usually used with characters as terminals.
+
+CFGs, on the other hand, are often used with lexical tokens. Those tokens are
+issued by a first pass on the input, called tokenization or lexical analysis
+(lexing for short). Tokenization converts the stream of characters into a stream
+of tokens, which usually correspond to sequences of characters.
+
+PEGs can do away with tokens because greeedy matching and the presence of
+lookahead operator make it easy to express tokens as grammar rules.
+
+In CFGs, tokens are usually defined using regular expressions. A tokenizer at a
+given input position emits the token whose regular expression gives the longest
+match at that position, then consumes the input corresponding to the token.
+
+A parser that does not operate on tokens but directly on characters is called a
+\emph{scannerless parser}. The term \emph{scanner} refers to the code that
+performing tokenization.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Memoization}
+\label{peg_memoization}
+
+The single parse rule enables easy memoization for PEGs. Since there can be at
+most a valid parse for each rule per input position, it is trivial to memoize
+the result of trying a given rule at a given input position.
+
+The number of rules in a PEG is constant w.r.t. the input size. When parsing,
+the overhead a rule adds to the parsing time of the nonterminal on its
+right-hand side is also constant. This means that a top-down recursive PEG
+parser with memoization can parse any input in linear time. PEG parsers using
+memoization are called \emph{packrat parsers} (\emph{packrat} is a term used to
+designate a compulsive hoarder).
+
+We give more information about packrat parsing in section
+\ref{packrat_parsing}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Further Comparison of PEGs and CFGs}
+\label{further_comp}
+
+This section takes the comparison between PEGs and CFGs a bit further, by
+examining topics of particular relevance to our situation. The superiority of
+PEGs in the examined topics was a major factor in the decision to use PEGs in
+caxap.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Reasoning about Grammars}
+
+This section presents an opinion rather than a hard fact, namely that PEGs are
+easier to reason about than CFGs.
+
+The key property of PEG that makes to reason with is the absence of horizontal
+backtracking. It means that if you determine that a nonterminal matches some
+prefix of the remaining input, no later failure of another symbol can change the
+matched input.
+
+In the case of repetition, we only have to consider a single case — greedy
+matching — instead of as many cases as the number of repeated item in the
+greedily matched sequence
+
+Put otherwise, since PEG parsers backtrack less than CFG parsers, parsing PEGs
+by hand has a smaller cognitive overhead.
+
+Greedy matching also resolves some unwanted ambiguities arising in CFGs. The
+most famous of which is the \emph{dangling else problem}. This problem occurs
+with rules such as [\lstinline{A ::= if (E) S else S | if (E) S}], where
+\texttt{E} is a nonterminal representing expressions and \texttt{S} a
+nonterminal representing statements, including ``\texttt{if}'' statements.
+
+Figure \ref{dangling_else} shows an ambiguous input for the \texttt{A} rule
+when used in a CFG, and the two possible interpretations. When the rule appears
+in a PEG, there is only one possible interpretation: the first one. This is due
+to greedy matching: the parse would try the first alternative, but the first
+\texttt{S} would consume the rest of the output. So the second alternative would
+be picked, with \texttt{S} matching the second \texttt{if} and the
+\texttt{else}.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single,language=C]
+// ambiguous input
+if (true) if (true) print "yes" else print "no"
+
+// first interpretation
+if (true) {
+  if (true) print "yes"
+  else print "no"
+}
+
+// second interpretation
+if (true) {
+  if (true) print "yes"
+} else {
+  print "no"
+}
+\end{lstlisting}
+\caption{Ambiguous input for the CFG rule [\texttt{A <- if (E) S else S | if E
+    S}], along with the two potential interpretations for the input.}
+\label{dangling_else}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Expressivity}
+\label{cfg_peg_expressivity}
+
+The PEG formalism wouldn't be very useful if it only allowed to express a much
+smaller class of languages than the CFG formalism. Fortunately this is not the
+case.
+
+There are known languages that can be parsed by PEGs but not by CFGs. The
+typical example is the $a^n b^n c^n$ language \cite{ford2002thesis}, which can
+be parsed thanks to the and-predicate.
+
+Whether or not the languages generated by CFGs are a subset of the languages
+recognized by PEGs is an open problem. However the fact that this problem is not
+solved indicates that it is quite hard to find a language generated by a CFG but
+not recognized by a PEG, so it is unlikely to pose problems in practice. It has
+also been shown \cite{ford2002thesis} that a PEG parser can recognize any LL(k)
+or LR(k) language.
+
+But the set of recognized languages is not the whole story. The structure of the
+parse tree resulting from the parse also matters. For instance, the arithmetic
+expression $1 + 1 + 1$ could be matched left-associatively as $(1 + 1) + 1$ or
+right-associatively as $1 + (1 + 1)$.
+
+As mentioned earlier, PEGs don't support left-recursion, which is used to yield
+left-associative parse trees. We contend with this issue in section
+\ref{peg_left_recursion}.
+
+We must also point out that, in most cases, the complexity of a PEG is similar
+to that of the CFG generating language recognized by the PEG. Empirically, this
+is true of common programming language idioms.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Grammar Composition}
+\label{grammar_composition}
+
+Both PEGs and CFGs are closed under composition. Composing two grammars is done
+by merging the rules of the two grammars (after renaming the nonterminals, to
+avoid name clashes) and inserting the starting symbol of one of the grammars
+(the slave grammar) into the other (the master grammar): one or more rules of
+the master grammar's rules must be modified to include the starting symbol of
+the slave grammar. New rules can be added if needed. The whole process is
+sometimes referred as \emph{gluing} the grammars. The starting symbol of the new
+grammar is the starting symbol of the master grammar. Composition yields a new
+grammar that is still a PEG or a CFG.
+
+There are unfortunately a few pitfalls. Two unambiguous CFGs can be composed
+into an ambiguous CFG. This cannot happen with PEGs which are inherently
+unambiguous. However, combining two PEG grammars can lead to cases of language
+hiding (see section \ref{ambiguity}).
+
+Combining two CFGs is also difficult because of tokenization, since the two
+grammars might have been designed to work with a different set of lexical
+tokens. Practical CFG parsers often work around this limitation by switching
+context during the tokenization step. An example of this is the Scala
+programming language, which supports inline XML. \cite{scala_spec} This limits
+the places were the starting symbol of the slave grammar might appear.
+
+Linear time CFG parsers (LL(1), LL(k), LR, LALR) parse only a subset of CFG
+grammars. Said subsets are not closed under composition.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Definition of the PEG Formalism}
+\label{peg_formalism}
+
+This section presents a simple, yet precise definition of a minimal version of
+the PEG formalism. The PEG paper \cite{ford2004} has a much more formal
+definition of PEGs.
+
+A Parsing Expression Grammar (PEG) consists of four elements. A set of
+nonterminal symbols, a set of terminal symbols, a set of rules and a starting
+nonterminal. All the sets must be finite. Each rule takes the form
+[\texttt{<nonterminal> ::= <expression>}]. For each nonterminal, there should be
+one and only one rule with that terminal on the left-hand side.
+
+On the right-hand side of each rule is a parsing expression. A parsing
+expression can be a single terminal, a single nonterminal, or an operation
+taking one or more sub-expressions as parameter. We also allow the right-hand
+side to be empty, in which case we say that the right-hand side contains the
+\emph{empty expression}.
+
+There are three operations in our minimal formalism: sequence, choice, and the
+not-predicate. In the next section, we add other operations and explain how they
+can be converted to the minimal formalism.
+
+In the context of our formalism, we define \texttt{parsing} as the evaluation of
+a parsing expression against a certain position of the input. We then check if
+the expression is successful, and if it is, we skip to our next input
+position. Parsing an input means evaluating the grammar's starting nonterminal
+against the position 0 of the input.
+
+In practice, parsers are not mere recognizers. They also capture the match
+between an expression and the part of the input it consumes, as well as the
+relationship between the match for an expression and the matches for its
+sub-expressions.
+
+Each expression has two important characteristics: the condition that has to be
+met for the expression to succeed, and how it manipulates the input position. A
+failing expression always resets the input position to the position at which it
+was evaluated.
+
+We know specify the behavior of each of the six basic forms of expressions. The
+operations (choice, sequence and not-predicate) are given in increasing order of
+associativity.
+
+\begin{itemize}
+\item The Empty Expression
+
+  The empty expression always succeeds and does not move the input position.
+
+\item A Terminal
+
+  Succeeds if the terminal at the current input position is the same as the
+  given terminal. Moves the input position forward by one if successful.
+
+\item A Nonterminal
+
+  Parses the expression on the right-hand side of the rule which has the
+  nonterminal on the left-hand side. Succeeds if the expression succeeds.
+
+\item \lstinline{<expr1> | ... | <exprN>}
+
+  Choice: parses the sub-expressions from left to right, until one of them
+  succeeds. The input position is reset when one of the sub-expressions fails,
+  so that each sub-expression is evaluated at the same position as the
+  choice. Succeeds if one of the sub-expression succeeds.
+
+\item \lstinline{<expr1> ... <exprN>}
+
+  Sequence: parses the sub-expressions from left to right, as long as they
+  succeed. The input position is not reset between expressions. Succeeds if all
+  sub-expressions succeed.
+
+\item \lstinline{!<expr>}
+
+  Not-predicate: parses the sub-expression, but resets the input position
+  regardless of outcome. Succeeds if the sub-expression fails.
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Extended Notation}
+\label{extended_notation}
+
+This section presents an enriched version of the minimal PEG formalism presented
+in the previous section. This notation is the one used by caxap. It differs
+slightly from the notation introduced in the PEG paper. \cite{ford2004}
+
+We introduce new way to match terminals, as well as new PEG operations. For each
+such addition, we specify its behavior, and explain how to map it to the minimal
+formalism. The layout of this section is heavily inspired by the manual of the
+Mouse parser generator. \cite{mouse_man}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Matching Characters}
+
+The extended notation assumes that terminals are characters. The notation
+supplies many ways to match characters, under the form of \emph{character
+  specifiers}, which we now describe.
+
+\begin{itemize}
+
+\item \verb|"string"|
+
+  Literal string: matches a sequence of characters. The string can be empty in
+  which case it represents the empty expression. That is the only way to
+  represent the empty expression in the full notation.
+
+\item \verb|_|
+
+  Wildcard: matches any single character.
+
+\item \verb|[abcd]|
+
+  Character class: matches one of the characters inside the brackets.
+
+\item \verb|^[abcd]|
+
+  Negated character class: matches any character which is not inside the
+  brackets. Equivalent to [\lstinline{![abcd] _}].
+
+\item \verb|[a-z]|
+
+  Character range: matches a character between the first and last one, using the
+  integral representation of characters in whatever character set you are using.
+
+\item \verb|^[a-z]|
+
+  Negated character range: matches any character not between the first and last
+  one. Equivalent to [\lstinline{![a-z] _}].
+
+\end{itemize}
+
+Of the presented specifiers, only the first three appear in the PEG
+paper. Translating them into the minimal formalism is straightforward. A literal
+string translates a sequence of characters. Wildcards, character classes and
+character ranges are converted to choices. Note that the wildcard specifier is
+made possible by the fact that we specified the set of terminals to be finite.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{New Operators}
+
+The extended notation introduces quite a few new operators. Here are their
+descriptions.
+
+\begin{itemize}
+
+\item \lstinline{<expr>?}
+
+  Optional expression: try to parse the sub-expression, if it fails then reset
+  the input to the initial position. Always succeeds.
+
+  Equivalent to [\lstinline{<expr> | ""}].
+
+\item \lstinline{<expr>*}
+
+  Zero or more (aka Star): parses the sub-expression as long as it keeps
+  succeeding. Always succeeds.
+
+  Equivalent to [\lstinline{(<expr>+)?}].
+
+\item \lstinline{<expr>+}
+
+  One or more (aka Plus): parses the expression as long as it keeps
+  succeeding. Succeeds if the expression succeeds at least once.
+
+\item \lstinline{&<expr>}
+
+  And-predicate: parses the sub-expression, but resets the input position
+  regardless of outcome. Succeeds if the sub-expression succeeds.
+
+  Equivalent to [\lstinline{!(!<expr>)}].
+
+\item \lstinline{<expr1> *+ <expr2>}
+
+  Parses \texttt{<expr1>} until \texttt{<expr2>}: syntactic sugar for
+  \texttt{(!<expr2> <expr1>)* <expr2>}. Parses \texttt{<expr1>} until
+  \texttt{<expr2>} is encountered. Succeeds if \texttt{<expr2>} succeeds.
+
+\item \lstinline{<expr1> ++ <expr2>}
+
+  Parses \texttt{<expr1>} at least once until \texttt{<expr2>}: parses
+  \texttt{<expr1>} until \texttt{<expr2>} is encountered. Succeeds if
+  \texttt{<expr1>} succeeds at least once and \texttt{<expr2>} succeeds.
+
+  Equivalent to [\lstinline{(!<expr2> <expr1>)+ <expr2>}].
+
+\item \lstinline{<expr1> +/ <expr2>}
+
+  List: syntactic sugar for \lstinline{<expr1> (<expr2> <expr1>)*}. Parses a
+  list of \texttt{<expr1>} using \texttt{<expr2>} as a separator. Succeeds if
+  \texttt{<expr1>} succeeds at least once.
+
+  Equivalent to [\lstinline{<expr1> (<expr2> <expr1>)*}].
+
+\end{itemize}
+
+The last three operators don't appear in the original PEG paper. The first two
+of those come from the Mouse manual. \cite{mouse_man} They embody patterns that
+occur frequently when writing practical grammars.
+
+Plus is the only operator that can't be immediately translated to the minimal
+formalism. It can only be converted by adding a new rule to the grammar. Namely,
+[\lstinline{<expr>+}] is equivalent to the nonterminal \lstinline{A} defined as
+[\lstinline{A ::= <expr> A | <expr>}].
+
+We could also have reduced Plus to Star instead, and converted Star into the
+minimal formalism in the same way.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Recapitulation \& Precedence}
+
+Table \ref{parsing_exprs} presents a recap of all specifiers ands operators. It
+also gives their precedence, where an higher precedence means that the operator
+is more tightly binding (more prioritary). Specifiers are most prioritary. You
+can defeat the usual operator priority by using parentheses.
+
+\begin{table}[here]
+\begin{tabular}{|l|l|l|}
+\hline
+expression & name & operator precedence \\
+\hline
+\verb|my_nonterminal|             & Nonterminal               & 6 \\
+\verb|(<expr>)|                   & Parentheses               & 6 \\
+\verb|"string"|                   & Literal String            & 6 \\
+\verb|[abcd]|                     & Character Class           & 6 \\
+\verb|^[abcd]|                    & Negated Character Class   & 6 \\
+\verb|[a-z]|                      & Character Range           & 6 \\
+\verb|^[a-z]|                     & Negated Character Range   & 6 \\
+\verb|_|                          & Wildcard                  & 6 \\
+\verb|<expr>?|                    & Optional                  & 5 \\
+\verb|<expr>*|                    & Zero or More              & 5 \\
+\verb|<expr>+|                    & One or More               & 5 \\
+\verb|&<expr>|                    & Lookahead                 & 4 \\
+\verb|!<expr>|                    & Forbid                    & 4 \\
+\verb|<expr1> *+ <expr2>|         & Zero or More Until        & 3 \\
+\verb|<expr1> ++ <expr2>|         & One or More Until         & 3 \\
+\verb|<expr1> +/ <expr2>|         & List Separated by         & 3 \\
+\verb|<expr1> ... <exprN>|        & Sequence                  & 2 \\
+\verb/<expr1> | ... | <exprN>/    & Ordered Choice            & 1 \\
+\hline
+\end{tabular}
+\caption{  Recap of the different kinds of parsing expression along with their
+  precedence.}
+\label{parsing_exprs}
+\end{table}
+
+Nonterminals names may contain letters (both lower- and upper-case), digits and
+underscores, but must start with a letter or underscore.
+
+In the table, \texttt{<expr>}, \texttt{<expr>1}, etc. refer to any entry in the
+table with higher precedence.
+
+This means sequences of prefix or suffix operators are not allowed, as they are
+meaningless. Repetition of the same suffix operator (\texttt{*}, \texttt{+} and
+\texttt{?}) yields the same behavior as a single occurrence of the
+operator. Mixing different suffix operators is equivalent to using a single
+\texttt{*} operator. Similarly, \texttt{!!} is equivalent to \texttt{\&};
+\texttt{\&!} and \texttt{!\&} are equivalent to \texttt{!}.
+
+Binary operators have no associativity, meaning you can't write something like
+\texttt{<expr1> *+ <expr2> *+ <expr3>}. You have to pick \texttt{(<expr1> *+
+  <expr2>) *+ <expr3>} or \texttt{<expr1> *+ (<expr2> *+ <expr3>)} explicitly.
+
+Also note that we don't need any special form of escaping for characters that
+match operators: it is perfectly fine to write \verb|"*+"| or \verb|[*-+]|.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Parsing PEGs}
+\label{parsing_peg}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Naive Parser}
+
+Let's adapt our top-down CFG parser from figure \ref{cfg_parse_pseudo} to
+parse PEGs instead. The result is shown in figure \ref{peg_parse_pseudo}.
+Significant differences between both version are indicated by asterisks
+(\texttt{*}). Not highlighted is the fact that every return statement has been
+modified to return a \lstinline{(result, input_left)} pair.
+
+The new algorithm adds a clause to the \texttt{if}-statement to deal with the
+not-predicate. But the most significant changes are on lines 30 and 32: instead
+of recursing on the rest of the symbols, we only recurse on the expansion of the
+first symbol (a nonterminal). If that succeeds, only then do we recurse on the
+rest of the input. This basically enforces the single parse rule: the
+nonterminal is matched to an alternative, and backtracking won't be able to
+change it like it could in the CFG parser.
+
+\begin{figure}
+\small
+\commentsfive
+\begin{lstlisting}[frame=single,language=C]
+parse(symbols, input)
+{
+  if (symbols is empty) {
+    if (input is empty) {
+      return accept, empty;
+    }
+    else {
+      return refuse, symbols.tail;
+    }
+  }
+  else if (symbols.head is a terminal)
+    if (symbols is empty || input.head != symbols.head) {
+      return refuse, input;
+    }
+    else {
+      return parse(symbols.tail, input.tail);
+    }
+  }
+* else if (symbols.head is a not-predicate) {
+*   result, _ = parse(predicate operand, input);
+*   if (result == accept) {
+*     return refuse, input;
+*   }
+*   else {
+*     return accept, input;
+*   }
+* }
+  else if (symbols.head is a nonterminal) {
+    for each alternative (symbols.head -> rhs) {
+*     result, input_left = parse(rhs, input);
+      if (result == accept) {
+*       return parse(symbols.tail, input_left);
+      }
+    }
+    return refuse, input;
+  }
+}
+parse(list(starting symbol), input);
+\end{lstlisting}
+\caption{Pseudo-code for a PEG top-down recursive parser, using the minimal PEG
+  formalism. Notable difference with the algorithm from figure
+  \ref{cfg_parse_pseudo} have been indicated with asterisks (\texttt{*}).}
+\label{peg_parse_pseudo}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Packrat Parsing}
+\label{packrat_parsing}
+
+The naive parser from previous section can have exponential running time for
+some grammars. To solve this problem, we use a memoizing parser called
+\emph{packrat parser}.
+
+Packrat parsers are an important reason why PEG are interesting. Section
+\ref{peg_memoization} explained why PEGs' features made it easy to add
+memoization to a PEG parser in order to guarantee a linear parse time.
+
+A packrat parser is not limited in any way and can parse all PEGs in linear
+time. This is a big deal, since the PEG formalism seems to be as expressive as
+CFGs (see section \ref{cfg_peg_expressivity}).
+
+Packrat parsing was introduced by Bryan Ford in 2002, based on work by Aho,
+Birman and Ullman in the 70s. \cite{ford2002} That's before the PEG paper
+\cite{ford2004}; and indeed, the original packrat parsing algorithm was
+initially designed to work with the TLDP formalism, which has been proven
+equivalent to the PEG formalim. \cite{ford2004}
+
+Packrat parsing is not perfect however. Naive packrat parsing consumes a lot of
+memory. Storing and retrieving the memoized matches has a high overhead, which
+makes packrat parsing less attractive than its theoretical properties would
+suggest.
+
+In particular, packrat parsing performs poorly compared with linear-time CFG
+parsers and naive CFG or PEG parsers, when using a grammar designed specifically
+for those parsers. Those grammars are designed to limit backtracking, and as
+such benefit very little from memoization.
+
+This result is shown notably in a paper title ``DCGs + Memoing = packrat
+parsing; But is it worth it?''. \cite{becket2008} We however believe that the
+authors of this paper overgeneralize their conclusions, as they state the belief
+that packrat parsing is inefficient to parse most programming languages. I tend
+to agree, but only if the grammars for the programming languages are written in
+a way that minimizes backtracking, not in the way that would be most natural or
+elegant. While optimizing grammars is commonly done these days, it is an
+activity most people would rather eschew. As we explain in section
+\ref{our_java_grammar}, memoization was definitely needed in our case.
+
+The original packrat paper \cite{ford2002} discusses the implementation of the
+scheme in the functional language Haskell. In \cite{grimm2006}, Robert Grimm
+discusses the implementation of packrat parsing in Java, and in particular the
+many optimizations that can be applied to make packrat parsing more efficient.
+
+Another pitfall of packrat parsing is that parsing should be stateless. What
+this means is that the result of a nonterminal parse at a given position cannot
+depend on some mutable state. Depending on mutable state would mean discarding
+all memoized matches at each state change, since a new parse might yield a
+result differing from the memoized match. This precludes PEG parsers to use
+user-defined predicates depending on mutable state.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Left-Recursion}
+\label{peg_left_recursion}
+
+As noted in section \ref{peg_left_recur}, PEGs don't support
+left-recursion. Accepting left-recursion would mean having multiple parse of the
+same nonterminal at the same input position, thus violating the single parse
+rule. Moreover, all PEG parsers currently in use are implemented as top-down
+recursive parsers, since the PEG formalism is explicitly designed to work with
+those kinds of parsers.
+
+Nevertheless, solutions have been offered; notably by Alessandro Warth in
+\cite{warth2008}, with packrat parsers in mind. In \cite{tratt2010}, Laurence
+Tratt first makes the point that Warth’s method works for any kind of PEG
+parser, and then goes on to argue that the behavior exhibited by that method is
+undesirable in presence of rules that are both left and right recursive.
+
+To understand the problem, consider the two grammars in figure
+\ref{left_recur_grammars}, describing the addition and the subtraction of
+naturals.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single]
+expr ::= expr "-" num / expr "+" num / num
+num  ::= [0-9]+
+
+expr ::= expr "-" expr / expr "+" expr / num
+num  ::= [0-9]+
+\end{lstlisting}
+\caption{Two PEGs describing the addition and substraction of natural numbers.}
+\label{left_recur_grammars}
+\end{figure}
+
+With Warth’s method, using the first grammar leads to a left-associative parse:
+$1 + 1 + 1$ becomes $(((1) + 1) + 1)$; whereas using the second grammar leads to
+right-associative parse: $1 + 1 + 1$ becomes $1 + ( 1 + (1)))$. While this parse
+may seem reasonable, it violates the greedy nature of PEGs. The left-recursive
+nonterminal should match as much input as possible.
+
+Tratt then proposes a method that can parse grammar rules with direct left and
+right recursion and give them a left-associative parse. The problem is that he
+did not generalize his method to indirect recursion, and that his method does
+not work with potential left or right recursion: i.e. when a rule can be
+recursive or not, depending on an optional element. For instance, the rule
+[\lstinline{A ::= a A c?}] may or may not be right-recursive, depending on the
+presence of the terminal \texttt{c}.
+
+There is also another way to go about direct left recursion. It is used notably
+in the packrat parser \emph{Rats!}. \cite{grimm2006} The method converts a rule
+such as [\lstinline{A ::= a | A b}] into something like
+[\lstinline{A ::= a b*}]. When the parse is complete, the resulting parse tree
+is modified in order to yield the left-associative parse tree that would be
+expected from the first rule.
+
+caxap does not currently support left-recursion. It is considered for the
+future, however. Not supporting left-recursion does cause some problems which
+are explained in section \ref{our_java_grammar}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why PEGs}
+
+Section \ref{further_comp} gives the most important reasons why we chose to use
+PEGs in caxap: PEGs are easier to reason about than CFGs, they seem to be as
+expressive, and can be easily composed.
+
+This last point is particularly important. With CFGs, some syntax couldn't have
+been used in macros, as they would have led to ambiguities. With PEGs, however,
+such ambiguities are eliminated by the ordering of rules. caxap allows the user
+to insert expressions as first or last alternative to a rule. A user needs to be
+careful not to introduce language hiding when inserting an expression as first
+alternative.
+
+PEGs can be parsed in linear time with a packrat parser, although the constant
+factor for the linear bound is large. It has been shown that a heavily optimized
+packrat parser can outperform GLR parsers on practical grammars.
+\cite{grimm2006} This should at least convince us that picking packrat parsing
+is not an inherently wrong choice.
+
+The fact that PEGs use scannerless parsing is another advantage. We don't have
+to restrict the tokens that the user can use in its syntactical extensions. This
+means that the user can easily define new operators, for instance.

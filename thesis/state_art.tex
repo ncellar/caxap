@@ -1,0 +1,715 @@
+\chapter{Related Work}
+\label{state_art}
+
+Macros are not exactly a new concept. Lisp has had macros since the early
+sixties. Hygienic macros were added to Scheme in 1991. We describe hygiene in
+section \ref{hygiene}. Both systems - there is some amount of discussion in the
+community about which is better - are still the golden standard by which any
+other macro systems are judged, because of their unmatched expressiveness.
+
+But this expressive power comes at a cost, namely the fact that Lisp syntax -
+the nesting of parentheses referred to as \emph{S-expressions} - is very
+restricted, verging on inexistent. In this section we want to explore frameworks
+and languages that make macros work in the presence of richer syntactic
+constructs.
+
+As it turns out, the field is relatively rich. For this reason, not every
+macro-related undertaking could be summarized and I had to make a selection. I
+tried to sample from the different ideas and schools of thought I encountered. I
+also skewed the selection towards projects similar to mine in scope and
+intent. For instance, macro frameworks for the Java language are much more
+represented than frameworks targeting to other languages.
+
+Among the works that were left out, I'd like to mention the MS$^2$ macro system
+\cite{weise93} and the Nemerle language \cite{nemerle_paper} \cite{nemerle_web}
+as those are two genuinely meaningful and interesting pieces of work that didn't
+make the cut to this section.
+
+We start by reviewing some important concepts in macro systems, which have not
+yet been introduced in this thesis. We then proceed to look at different
+categories of related work.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{More Macro Concepts}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Homoiconicity}
+
+A language is homoiconic if it represents its syntax in the same way as a data
+structure. This means two things: the language's syntax looks like the literal
+representation of some data structure; and the program's structure is internally
+represented by that data structure.
+
+Lisp and its variants are the textbook example of homoiconicity. In this case,
+the fundamental data structure is the list.
+
+Homoiconicity makes working with macros much easier: code can be written out as
+a literal data structure that looks like regular code. This makes quotations
+easy to work with, and easy to implement. Code is also easy to manipulate since
+there is a perfect mapping between the data structure used for this purpose and
+the lexical structure of the code.
+
+One of the main challenges of this thesis was to make macro work with a
+non-homoiconic language, and to make working with macros as agreeable as
+possible.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Hygiene}
+\label{hygiene}
+
+A macro is said to be \emph{hygienic} if it satisfies two conditions.
+
+First, the macro cannot inadvertently shadow a binding visible in the scope in
+which it is expanded. In practice, this means that all bindings introduced in a
+macro expansion are renamed to some unique identifier.
+
+Language which do not provide hygienic macros usually provide a facility to
+generate unique identifier names. The Lisp function that does so is called
+\texttt{gensym}.
+
+Second, free names in a macro expansion (names whose binding does not appear in
+the expansion) must refer to the same thing (variable, class, ...) in their
+expansion as they did in the expander code. In other words, names in a macro
+expansion are lexically scoped.
+
+Of course, those two behaviors are not always desirable. In particular, it is
+often desirable to have a name in a macro expansion take its meaning from code
+that surrounds the macro call (i.e. dynamic scoping). Good hygienic macro
+systems therefore provide a way to break hygiene on demand.
+
+caxap does not feature hygiene. See section \ref{implem_hygiene} for future
+plans on the matter.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Java Macro Frameworks}
+
+Those frameworks aim to introduce some form of macro system on top of the Java
+programming language. The kind of macros introduced and the implementation
+details vary widely between the frameworks.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{java-macros}
+
+The first framework we examine is soberly called \emph{java-macros}. I could not
+find much information about this project outside of its Google Code page
+\cite{java_macros}, but the underlying idea is original enough to be worth
+mentioning.
+
+The key idea is that, unlike macros as defined in section \ref{intro_macros},
+the input sequence for a macro does not need to be defined: the input sequence
+is always a whole source file. Macros themselves are represented by
+classes. Importing a macro in another class means that the code of that class
+should undergo the syntactic transformation described by the macro class.
+
+A macro class can be used to effect changes that correspond to multiple macros
+in caxap or in most other macro systems. However, \emph{java-macros} provides no
+facilities to ease the manipulation of the parse tree.
+
+The main benefit of whole-file syntactic transformations is that they allow for
+non-local changes. For instance, a method annotation could lead to the
+modification of other methods than the one annotated.
+
+Unfortunately, the implementation is a minimal working example, and suffers from
+important pitfalls. Firstly, the mechanism is implemented as a patch to the
+OpenJDK 7 code. The implementation, and worse, even the interface exposed to the
+user, rely on the compiler internals. Said internals could be subject to
+changes. Secondly, there is no way to specify new syntax for the language: the
+source file will be parsed normally and only then will the syntactic
+transformation be applied. This greatly diminishes the expressivity of the
+system, forcing us to hijack things such as annotations and naming conventions.
+Finally, there are no built-in mechanisms for macro composition: if multiple
+macro classes are imported, care must be taken to ensure they do not conflict.
+
+The project is not maintained and was last updated in 2007.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Jatha}
+
+Jatha is similar to our project in spirit, but less ambitious in its
+scope. Macros must appear as ``pseudo-function'', much like those used by the C
+preprocessor (as was shown in figure \ref{macro_example}). Macro calls can
+appear anywhere in the file.
+
+For instance, [\texttt{@PROP(String, name);}] is a macro call that a generates a
+private field called \texttt{name} with type \texttt{String} and a default
+public getter and setter.
+
+Where it differs notably from the C preprocessor and strays closer to our
+project is that the macros are procedural. Arbitrary Java code can be run at
+compile-time in order to generate the expansion of a macro.
+
+Unlike our system, the expansion generated by a macro is not a syntax tree, but
+an unchecked character stream. It is unclear whether macros can be composed.
+
+As for usage, a macro is written by subclassing the Jatha \texttt{Macro} class
+and overriding its \texttt{expand()} methods. A minimal set of utilities is
+supplied. Those are lexical in nature: they don't help to interpret Java code
+passed to your macro. Macros can share state via a message passing mechanism.
+
+The project page \cite{jatha} was last updated in 2003.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{The Jakarta Toolset (JTS)}
+
+The Jakarta Toolset is part of a bigger whole, the AHEAD Tool Suite (ATS), which
+is self-described as a set of tools that supports feature-oriented
+programming. It exists amongst a rich (and unfortunately, quite complex)
+ecosystem of tools.
+
+The Jakarta Toolset itself comprises two parts. First, the Jak language, an
+extension of Java that adds facilities like quasiquotation and generation of
+unique identifier. Second, Bali, a LALR parser generator. JTS uses what it calls
+``components''. Each component consists of a Bali grammar and a Jak
+program.
+
+From the grammar, Bali generates a parser and a class hierarchy, using the rule
+names as class names. Each class represents a type of syntax tree node. The
+classes form a hierarchy because a rule such as
+[\lstinline{Rule1 ::= Rule2 | Rule3}] will generate three classes with
+\texttt{Rule1} as super-class of \texttt{Rule2} and \texttt{Rule3}. The classes
+at the leafs of this hierarchy needs to be implemented in the Jak program. The
+implementation can be used as a form of callback, or to perform macro expansion.
+
+When extending a language, you need to have a base JTS component for the
+language you want to extend, and then a number of other components you want to
+compose into the language. Whereas Bali can be used to provide grammars for
+languages other than Java, the facilities in Jak target Java specifically. The
+JTS components could be compared to macro files in our system, whereas the base
+component is similar to our base grammar.
+
+The project is fairly similar to ours. The quotation mechanism is slightly less
+powerful as it only allows to quote/unquote the most common Java AST nodes.
+
+Unfortunately, the project can only be described as user-hostile. The amount of
+required reading before being able to set up anything is staggering. Many tools
+and formats are involved. While ample documentation is available, it often makes
+for opaque reading, with seemingly capital information omitted completely or not
+emphasized enough.
+
+In summary, our system is more tightly integrated and easier to use, whereas JTS
+benefits people needing other parts of the AHEAD Tool Suite.
+
+The project page \cite{ahead_toolsuite} was last updated in 2008. The
+information in this summary was taken (or inferred) from a 1998 paper on
+JTS. \cite{jakarta}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{The Java Syntactic Extender (JSE)}
+
+JSE \cite{JSE_web} \cite{JSE} is certainly the closest existing thing to our own
+framework. It is a syntactic procedural macro system.
+
+The biggest difference is that it does not work on a full grammar and syntax
+tree. Instead of a full syntax tree, it uses what it calls a \emph{skeleton
+  syntax tree} (SST): a syntax tree that tracks identifiers, literals and
+punctuation.
+
+The syntax of new macros is restricted to pre-determined \emph{shapes}. There is
+a shape that mimic function calls and a shape that mimics the way most java
+compound statements - such as \texttt{while}, \texttt{if} and \texttt{try} -
+work.
+
+Macro parameters are not constrained by grammar non-terminals, but by
+\emph{constraint types}. There are a few pre-defined constraint types
+corresponding to the most important Java non-terminals, such as
+\texttt{statement} and \texttt{expression}.  The user can implement his own
+constraint types.
+
+The system features a well thought out quasiquotation mechanism. It looks very
+much like our own, but with two big differences. First, there is no need to
+specify the grammar rule being used. Second, it does not seem possible to
+unquote a quotation. This means the quotation system less expressive, but more
+intuitive.
+
+Let's use the symbols \texttt{qq} and \texttt{uq} to represent respectively
+quasiquotation and unquotation. Let \texttt{x} be a variable with content
+\texttt{y}. In our system, \texttt{qq(qq(uq(uq(x))))} gives
+\texttt{qq(uq(y))}. In JSE, the same expression would give \texttt{qq(y)}. JSE
+also supplies an operator (\texttt{!})  \cite{jse_slides} to preserve outer
+unquotation. In JSE, \texttt{qq(qq(uq(!uq(x))))} gives \texttt{qq(uq(y))}.
+
+The inability to unquote quotations means JSE does not need to distinguish
+between quotations and quasiquotations. JSE also lacks splicing, albeit it could
+conceivably be implemented to work with JSE's quotation system.
+
+The JSE paper \cite{JSE} mentions an circumventable hygiene system, but this
+system has never actually been implemented as a part of JSE. It also envisions
+nifty debugging facilities which have not been implemented either. Such
+facilities include a macro expander that can expand macros one step at a time,
+and the ability to trace errors in expanded macros to the location where the
+macro appears in the original source.
+
+Figure \ref{jse_example} shows an example of macro definition, usage and
+expansion in JSE.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[language=Java, frame=single]
+// macro definition
+public syntax forEach {
+  case #{ forEach (?:type ?elt:name in ?:expression) ?:statement }:
+    return #{ Iterator i = ?expression.iterator();
+      while (i.hasNext()) {
+        ?elt = (?type)i.next();
+        ?statement
+      }
+    };
+}
+
+// macro use
+forEach(Task elt in tasks)
+  elt.stop();
+
+// macro expansion
+Iterator i = tasks.iterator();
+while (i.hasNext()) {
+  elt = (Task)i.next();
+  elt.stop();
+}
+\end{lstlisting}
+\caption{A JSE macro definition, along with an example use and its
+  expansion. The macro defines a \texttt{forEach} construct in terms of the
+  \texttt{while} loop and iterators.}
+\label{jse_example}
+\end{figure}
+
+The last software update was done in September 2003.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Other Frameworks and Languages}
+
+In this section we discuss frameworks that add macros on top of a programming
+language which does not have them already; as well as programming languages in
+which macros are built-in.
+
+The paper describing the macro system of the <bigwig> language
+\cite{bigwig_paper} starts with a thoughtful survey of macro-enabled languages
+and macro languages. Macro languages are languages whose purpose is to add
+macros to other languages or documents. The language covered are the C
+preprocessor, Scheme, M4, \TeX{}, Dylan, C++ (using templates), JTS, MS$^2$ and
+<bigwig>.
+
+Of those, we ourselves cover Scheme (as part of the Lisp family) and the C
+preprocessor in chapter \ref{intro_macros}; as well as JTS, <bigwig> and Dylan
+in this chapter. The reader anxious for a detailed comparison of the systems
+listed above should check the <bigwig> paper. \cite{bigwig_paper}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{<bigwig>}
+
+<bigwig> is, in the words of the official website \cite{bigwig}, ``a high-level
+programming language for developing interactive Web services''. The <bigwig>
+language features an interesting macro system described in a paper on the
+topic. \cite{bigwig_paper}
+
+Interestingly enough, the system has been abandoned in 2004 in favor of a Java
+based solution called JWIG. JWIG does not feature user programmable macros, but
+does feature a extension of the Java language called Xact. Xact adds syntactic
+extensions allowing for easy XML manipulations.
+
+<bigwig> features a syntactical, non-procedural, macro system. Macros
+invocations are recognized by the use of the macro name in starting
+position. Macro parameters are recognized via pattern matching. The matched
+arguments can then be reused in the macro body, which behaves like a big
+quasiquotation. Only arguments can be unquoted in the macro body.
+
+Argument matching is done by specifying a grammar non-terminal. However, the
+syntax specification is not a real grammar rule. To compensate for this lack of
+flexibility, <bigwig> introduces a few complementary mechanisms. First, a macro
+with the same name can have multiple versions with different syntax
+specifications. This offers a restricted form of choice. Second, there is a
+mechanism called \emph{metamorphism} which offers a limited form of recursive
+macros. This mechanism allows simulating repetition, for instance.
+
+<bigwig> macros are hygienic. All identifiers are renamed, including free
+identifiers. There is no way to bypass hygiene.
+
+Figure \ref{bigwig_repeat} shows a simple <bigwig> macro defining a new looping
+construct. Figure \ref{bigwig_enum} shows metamorphisms being used to define an
+enumeration construct.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single]
+syntax <stm> repeat <stm S> until (<exp E>); ::= {
+  {
+    bool first = true;
+    while (first || !<E>) {
+      <S>
+      first = false;
+    }
+  }
+}
+\end{lstlisting}
+\caption{A <bigwig> macro defining a new looping construct that behaves like
+  \texttt{do ... while(...)} with a negated condition, in terms of the
+  \texttt{while} looping construct.}
+\label{bigwig_repeat}
+\end{figure}
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single]
+syntax <decls> enum { <id I> <enums: decls Ds> } ; ::= {
+  int e = 0;
+  const int <I> = e++;
+  <Ds>
+}
+
+metamorph <decls> enums --> , <id I> <enums: decls Ds> ::= {
+  const int <I> = e++;
+  <Ds>
+}
+
+metamorph <decls> enums --> ::= {}
+\end{lstlisting}
+\caption{A <bigwig> macro defining an enumeration construct in terms of constant
+  integers.}
+\label{bigwig_enum}
+\end{figure}
+
+All in all, <bigwig> has an elegant macro system. It is more restricted than our
+own system - the syntax of macros is restricted, and the macros are not
+procedural - but it is also simpler. As such, it represents another interesting
+trade-off in macro design.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{ZL}
+
+ZL \cite{ZL} is a macro system that targets C and some parts of C++. There is
+not much to say about ZL that has not been said about other macro system
+reviewed here. What really sets ZL apart however, is how fully featured it is.
+
+ZL supports procedural macros, but has a pretty syntax for simple transformative
+macros. It has circumventable hygiene and shared state. It can introduce macro
+with new syntax, but has a simpler syntax to declare simple keyword-based
+macros. In short, ZL has both the simple and the powerful.
+
+It even sports compile-time reflection facilities, which allow for instance to
+get information about variable bindings. Not to mention that it works with
+C/C++, languages that are notoriously hard to parse (see section
+\ref{packrat_parsing} for an example).
+
+ZL has a complete and intelligible user manual, which is something rare enough
+across the reviewed systems to be worth mentioning.
+
+If our system were targeting C/C++, ZL is more or less what we would have wanted
+it to be.
+
+A pitfall ZL has is that - because of the way it parses source files - new
+syntax may not override some parts of the C/C++ grammar. Due to the C/C++
+parsing issues, the ZL parser performs multiple passes on the input. At the time
+a new syntax specification is able to be interpreted, the parser has already
+parsed things such as strings, comments and delimiters.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Dylan}
+
+The Dylan language is interesting because it is very openly inspired by Common
+Lisp and Scheme, but - contrary to them - does not feature a S-expression
+homoiconic syntax. Instead, it features a more conventional imperative syntax.
+
+Dylan is an object-oriented language with open classes, which can be defined
+across multiple compilation units and across multiple namespace units
+(\emph{modules}). Dylan features a metaobject protocol based on \emph{CLOS} -
+the Common Lisp Object System - with which it shares numerous characteristics
+such as the use of multimethods.
+
+But more to the point, Dylan comes with a convoluted macro system.
+\cite{dylan_manual} Dylan features three kinds of macros: definition macros,
+statement macros and function-like macros. Definitions macros allow users to
+define constructs that would be called \emph{declarations} in other
+languages. Statement macros allow the definition of new
+statements. Function-like macros are macro whose syntax looks like a function
+call.
+
+All macro calls must start with a \emph{distinguishing word}. Calls to macros
+which are not function-like must end with the \texttt{end} keyword.
+
+Each macro consists of \emph{rules} and \emph{templates}. To each rule
+corresponds a template. Dylan distinguishes between primary rules and secondary
+rules. Rules are analogous to macro's syntactic specification in our system, and
+templates are restricted forms of quasiquotation. When a macro call is
+encountered, the input matched by each rule is expanded to the code yielded by
+the associated template. Macros in Dylan are therefore not procedural, but
+rather transformative.
+
+Primary rules represent alternative syntax for the macro body. Each primary rule
+is tried in turn until one matches.
+
+Rules consist of a sequence of lexical tokens and \emph{pattern
+  variables}. Pattern variables are analogous to captures in our own system (see
+section \ref{captures_manual}): they allow capturing a part of the matched input
+in order to make use of it in the template. \emph{Constraints} such as
+\texttt{name}, \texttt{token} or \texttt{expression} can be attached to a
+pattern variable to specify what it should match. Additionally, a pattern
+variable can reference a set of auxiliary rule. In that case, the set of rules
+act just like the set of primary rules, but for a subset of the input. Each rule
+in the set is tried until one matches, and the result of the associated template
+is assigned to the pattern variable.  This is Dylan's way to emulate a macro
+referencing another macro in its syntactic specification.
+
+Rules features a few more ad-hoc bell and whistles, which notably allow matching
+a repeating sequence of items, something that would otherwise be impossible.
+
+As we mentioned earlier, templates look very much like quasiquotations. In
+Dylan, an unquotation is called a \emph{substitution}. A substitution references
+a pattern variable, to which it can apply some transformations such as adding a
+prefix and/or a postfix. Additionally, sequences can be processed specially,
+much like sequence splicing in our own system (see section \ref{splicing}).
+
+Figure \ref{dylan_example} shows an example macro, along with an example use and
+its replacement after macro expansion. The bracketed sections that preceded fat
+arrows (\texttt{=>}) are the rules. The bracketed sections that follow the fat
+arrows are the templates. Pattern variables and auxiliary rules references are
+preceded by a question mark. Constraints are separated from pattern variable by
+a colon. The identifier \texttt{table-contents} designates a set of auxiliary
+rules.
+
+\begin{figure}
+\small
+\begin{lstlisting}[frame=single]
+// Function Macro:
+
+    define macro table
+      { table(?table-class:expression, ?table-contents) }
+        => { let ht = make(?table-class); ?table-contents; ht; }
+      { table(?rest:*) }
+        => { table(<table>, ?rest); }
+
+      table-contents:
+      { } => { }
+      { ?key:expression => ?value:expression, ... }
+        => { ht[?key] := ?value; ... }
+    end macro table
+
+// Original Code:
+
+    let lights = table(<string-table>, "red" => "stop", "green" => "go");
+
+// Replacement Code:
+
+    let lights = begin
+      let ht = make(<string-table>);
+      ht["red"] := "stop"; ht["green"] := "go";
+      ht;
+    end;
+\end{lstlisting}
+\caption{A Dylan macro defining a literal syntax for a string-based hash
+  table. Taken from Dustin Voss' Dylan macro tutorial. \cite{dylan_macros}}
+\label{dylan_example}
+\end{figure}
+
+Dylan features circumventable hygiene. Its macros are lazy, meaning they are
+only expanded when required. It is as if all macros in our system were declared
+\texttt{raw}.
+
+Dylan's macro system is an interesting subject of study, because despite a lot
+of similarities, its approach is roughly the inverse of our own. Dylan's macro
+system is deliberately \emph{ad-hoc}. At its core, the macro system is not very
+powerful, but features are stacked on top to enable desirable behavior. The
+approach could be summarized as ``everything that is not allowed is
+forbidden''. On the contrary, our system - by allowing macros to appear
+anywhere, to have any syntax, and to run arbitrary expansion code - could be
+summarized as ``everything that is not forbidden is allowed''. What can be done
+in Dylan can be implemented as syntactic sugar on top of our system; and for the
+most part, already is. The drawback is that it's much easier to shoot yourself
+in the foot with our system. With great power come great responsibilities.
+
+The macro system of Dylan is very similar to that of <bigwig>, but it is more
+complex, and slightly more expressive.
+
+Should you want to know more about Dylan's macro system, I strongly recommend
+Dustin Voss' online tutorial on the matter. \cite{dylan_macros}
+
+Dylan was originally developed by Apple in the early nineties. Nowadays, it is
+mostly alive in the form of Open Dylan. \cite{open_dylan}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Elixir}
+
+Elixir is an up-and-coming functional language that targets the Erlang VM.  I
+thought it deserved a mention, as it is a macro-enabled language currently
+rising in popularity, and as it showcases the absolute simplest way to include
+procedural macros in a language.
+
+Elixir supports only function-like macros: a macro declaration looks very much
+like a function declaration whose return value is an AST.
+
+Elixir approach to ASTs is quite minimalist: the language defines its own form
+of S-expression. Instead of the list, Elixir uses tuples of 3 values of the form
+\texttt{\{ tuple | atom, list, list | atom \}}. The first element designates the
+construct used: it could be a function name, a macro name, an operator or the
+name of a construct such as \texttt{if}. Actually, in Elixir, operators and
+keyword constructs like \texttt{if} are simple syntactic sugar for
+functions. The first item can also be another tuple, in case we would like to
+use an anonymous function. The second item is a list that can hold metadata such
+as the line number. The third element holds the parameters to the
+function/macro.
+
+As you can see, Elixir is actually a Lisp in disguise. If you remove the
+syntactic sugars and perform macro expansion, all that is left is a nesting of
+function calls. I'm not all that familiar with the language, but an area in
+which it improves on Lisp is that it allows you to introduce local bindings
+without a \texttt{let}-like construct that would entail an additional level of
+nesting.
+
+Elixir macros are hygienic and hygiene can be circumvented. Elixir also has
+quasiquotation and unquotation operators. Figure \ref{elixir_example} shows how
+the usual \texttt{unless} construct is implemented as a macro in Elixir.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single]
+defmodule MyMacro do
+  defmacro unless(clause, options) do
+    quote do: if(!unquote(clause), unquote(options))
+  end
+end
+\end{lstlisting}
+\caption{An elixir macro defining the \texttt{unless} in terms of
+  \texttt{if}. Taken from the Elixir ``Getting Started''
+  guide. \cite{elixir_macros}}
+\label{elixir_example}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Katahdin}
+
+Sometimes, an idea is just so earth-shattering that you have to mention
+it. Macro systems are widely understood to be compile-time systems. Katahdin
+\cite{katahdin} is an interpreted language that does away with this
+preconception, as it allows macros to change the syntax and semantics of the
+language at run time.
+
+For instance, figure \ref{katahdin_example} shows how the modulo operator can be
+defined from within Kathadin itself. After evaluating that class, Katahdin will
+be able to parse the modulo operator; and the code after [\texttt{method Get()}]
+will be called each time the modulo operator is encountered.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single]
+class ModExpression : Expression {
+    pattern {
+        option leftRecursive;
+        a:Expression "%" b:Expression
+    }
+
+    method Get() {
+        a = this.a.Get...();
+        b = this.a.Get...();
+        return a - (b * (a / b));
+    }
+}
+\end{lstlisting}
+\caption{The definition of the modulo operator from within Katahdin. Taken from
+  the Katahdin paper. \cite{katahdin}}
+\label{katahdin_example}
+\end{figure}
+
+We won't comment further, as this new kind of macro lies quite far from our
+subject matter. Still, the possibilities are intriguing.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{PEG Parsers}
+
+While PEG parsing is only a small part of what my system does, it is legitimate
+to ask why I didn't use an existing parsing framework.
+
+The main difficulty with my system is that - because of macros - the grammar has
+to change while parsing. No parsing framework does readily supports that.
+
+The need to dynamically change the grammar means that parsers not running on the
+JVM were out of the question. This excluded \emph{Rats!} \cite{grimm2006}, a
+parser generator written in C, and the most referenced in the literature.
+
+I was left with \emph{Parboiled}, a PEG parser for Scala and Java; \emph{Mouse},
+a Java parser generator; and the Scala standard library packrat parsing
+combinators.
+
+None of those supports changing the grammar while the parser is running. Mouse
+is actually a parser generator, meaning it takes a grammar file as input, and
+outputs Java sources for a parser. Neither Parboiled nor Mouse do packrat
+parsing, they are naive top-down recursive parsers. The Scala parsing
+combinators cannot be modified after creation, and their lack of documentation
+bothered me.
+
+In the end, the choice was between adapting Mouse or Parboiled, or rolling my
+own system. I needed to add the ability to modify the grammar, and
+memoization. I finally decided to implement my own parser.
+
+Still, it is interesting to look at those other parsing frameworks to get
+improvements ideas. We try to identify the features from each framework that
+would benefit our system the most.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Rats!}
+
+Rats! biggest perk is that it performs a large number of optimizations
+\cite{grimm2006}, which makes packrat parsing competitive with the naive
+approach even for very simple grammars that don't exhibit much backtracking. In
+our case, the mutability of the grammar does preclude or hinders some of the
+optimizations performed by Rats!. For instance, Rats! does not memoize rules
+that are referenced in only one other rule. Adding macros to the mix means that
+a rule might at some point become referenced more than once. The optimization
+must therefore be disabled starting at the macro declaration site. Many
+optimizations follow the same pattern in the presence of macros: they might not
+be applicable anymore after a macro definition, and so provisions must be made
+to enable or disable the optimizations dynamically. This is not always possible,
+and can sometimes negate the benefits of the optimization.
+
+Among the optimization performed by Rats!, there are a few we believe would
+largely benefit our system. The first is the folding (the factoring out) of
+common prefixes between rules. This would eliminate some backtracking, and
+therefore diminish the number of unnecessary memoization table lookups. This
+optimization interacts especially well with the second one, the automatic
+detection of transient productions. A transient production is a production that
+can only be matched in the current context (i.e. the current rule). Transient
+productions do not need to be memoized, since if the current rule fails, the
+production cannot appear within any other rule at the current input
+position. Folding common prefixes allows us to discover more transient
+productions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Parboiled}
+
+Parboiled \cite{parboiled} features some impressive error-handling
+strategies. When parsing some input, the user has to choose a \emph{parse
+  runner} that will determine the error-handling strategy. The error reporting
+parse runner adopts the same strategy as caxap: it keeps track the farthest
+error position and the stack of rules used to get to that point (see section
+\ref{error_reporting_manual}). A notable difference is that this parser runner
+will parse the input multiple times. First with a parse runner that records no
+diagnostic information at all, therefore speeding up the parse if no errors are
+encountered. Only if an error is encountered does subsequent parses take place
+to record the farthest error position and the stack of rules used to get to that
+point. This is done to minimize memory reads and writes, something necessary to
+speed up the parse in the presence of backtracking, since Parboiled does not
+implement memoization.
+
+But where Parboiled really shines is that it supplies a \emph{recovering} parse
+runner, which can recover from parse errors. When it encounters an error, this
+parse runner tries to perform a single-character insertion/deletion/replacement
+to correct the error. If this fix is successful, it continues parsing up to the
+next error, where it applies the same protocol. If no single-character fix is
+adequate, the parse runner performs a
+\emph{resynchronization}. Resynchronization consists of seeking the first parent
+rule which is a sequence that has matched at least one character; then
+determining which characters may follow this rule. The parse runner skips all
+the characters that don't qualify, then continues parsing as before.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Mouse}
+
+Mouse's prime asset is its simplicity, and it largely influenced the design of
+the parser I ended up with. In particular I found the way it represented the
+grammar as an expression graph particularly elegant. caxap's error handling
+mechanism (see section \ref{error_reporting_manual}) is also directly inspired
+from the one featured in Mouse.
+
+While Mouse is a naive top-down recursive PEG parser, it allows some limited
+memoization: the two last calls to each method generated for a rule can be
+memoized. Keep in mind that Mouse is a parser generator; hence it generates a
+Java method to parse each grammar rule. It would be interesting to try out a
+similar limited backtracking strategy in caxap.

@@ -1,0 +1,85 @@
+<project
+  xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                      http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.norswap.caxap</groupId>
+  <artifactId>examples</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <build>
+    <sourceDirectory>generated</sourceDirectory>
+
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.1</version>
+        <configuration>
+          <source>1.7</source>
+          <target>1.7</target>
+        </configuration>
+      </plugin>
+
+      <!-- shut out "[debug] execute contextualize" -->
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>2.6</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.2.1</version>
+        <executions>
+          <execution>
+            <id>caxap</id>
+            <phase>generate-sources</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>java</executable>
+              <arguments>
+                <argument>-jar</argument>
+                <argument>../target/caxap-1.0-SNAPSHOT.jar</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>run</id>
+      <activation><property><name>run</name></property></activation>
+      <build><plugins><plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.2.1</version>
+        <goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>pkg.Use</mainClass>
+          <commandlineArgs>-cp ../target/caxap-1.0-SNAPSHOT.jar</commandlineArgs>
+        </configuration>
+      </plugin></plugins></build>
+    </profile>
+  </profiles>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>eu.norswap.caxap</groupId>
+      <artifactId>caxap</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/../target/caxap-1.0-SNAPSHOT.jar</systemPath>
+    </dependency>
+  </dependencies>
+
+</project>

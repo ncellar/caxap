@@ -1,0 +1,30 @@
+package pkg;
+
+require static my_util.AccessibleUtils::accessors;
+
+/**
+ * Automatically generates a getter and a setter for the field(s).
+ */
+macro Accessible replaces fieldDeclaration
+: "accessible" fieldDeclaration
+{
+  return accessors(input, true, true);
+}
+
+/**
+ * Automatically generates a getter for the field(s).
+ */
+macro Retrievable replaces fieldDeclaration
+: "retrievable" fieldDeclaration
+{
+  return accessors(input, true, false);
+}
+
+/**
+ * Automatically generates a setter for the field(s).
+ */
+macro Modifiable replaces fieldDeclaration
+: "modifiable" fieldDeclaration
+{
+  return accessors(input, false, true);
+}

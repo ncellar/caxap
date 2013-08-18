@@ -1,0 +1,44 @@
+\chapter{Conclusion}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{What Was Done}
+
+I have implemented a macro framework on top of the Java programming
+language. This framework acts as a pre-processor for Java sources. It relies on
+parsing expression grammars to specify the syntax of macros. Its prime design
+objective was generality: I didn't want to restrict the syntax the user could
+introduce into the language, nor how he could process this syntax. caxap's
+macros are therefore procedural, meaning arbitrary code is run at compile time
+to generate a macro's expansion.
+
+I hope to have shown that such an approach was practical. The framework can now
+be used to implement macros of practical values, and unlock a whole range of
+abstractions that were previously impossible. There are problems, which we talk
+about in the next section. But none of these problems form a major road block. I
+am confident in my ability to reduce the impact of those problems significantly,
+or even eliminate them totally, in the future.
+
+One of the assumptions I made was that by designing a very general core, the
+framework could be extended with facilities that would make working with macros
+easier in common cases. I think that our implementation of quasiquotation
+(section \ref{quotation_manual}) and match finders (section \ref{match_api})
+demonstrate this assumption to be true.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{The Way Forward}
+
+The work on caxap is not complete. Its main issue is a poor user
+experience. This manifests itself primarily in three aspects: poor performance,
+confusing error reports and lack of IDE integration. We explore potential
+solutions to those issues in section \ref{future_work}.
+
+While fixing the user experience will be my top priority, there are a few
+features I would like to see in caxap. Chief amongst them is the ability to
+perform non-local transformations, as discussed in section
+\ref{global_transformations}.
+
+Finally, I would like to make the system capable of extending itself. Meaning
+that enough functionality would be exposed to allow convenience utilities such
+as quasiquotation and match finding to be implemented by users of caxap without
+needing to dig in its internals. I do believe this objective is not that far out
+of reach.

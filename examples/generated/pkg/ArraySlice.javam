@@ -1,0 +1,36 @@
+package pkg;
+
+import static trees.MatchSpec.rule;
+import my_util.ArraySlice;
+macro SliceSuffix called : "[" (one:expression)? ":" (two:expression)? "]" ; 
+
+/**
+ * Allow SliceSuffix amongst the suffixes  of a suffixedPrimaryExpression.
+ *
+ * Works only with arrays of object types for now.
+ * Could be made to work with primitives, but you need new overloads in
+ * my_util.ArraySlice.
+ */
+prioritary macro ArraySlice as suffixedPrimaryExpression
+: expr:(primaryExpression primaryExpressionSuffix*)
+  suffixes:SliceSuffix
+  (suffixes:primaryExpressionSuffix | suffixes:SliceSuffix)*
+{
+  Match expression = compiler.util.Quoter.dynamicQuote("suffixedPrimaryExpression", "#1 ", (Object)expr[0]);
+  
+  for (Match suffix : suffixes) {
+  	if (suffix.has(rule("primaryExpressionSuffix"))) {
+      expression = compiler.util.Quoter.dynamicQuote("suffixedPrimaryExpression", "#1 #2 ", (Object)expression.string(), (Object)suffix);
+    }
+    else {
+      Match[] onec = suffix.getCaptures("one");
+      Match[] twoc = suffix.getCaptures("two");
+      Match start = onec.length > 0 ? onec[0] : compiler.util.Quoter.primitiveQuote("expression", "0");
+      Match stop  = twoc.length > 0 ? twoc[0] : compiler.util.Quoter.primitiveQuote("expression", "null");
+      
+      expression = compiler.util.Quoter.dynamicQuote("suffixedPrimaryExpression", "my_util.ArraySlice.slice(#1, #2, #3)", (Object)expression, (Object)start, (Object)stop);
+    }
+  }
+  
+  return expression;
+}

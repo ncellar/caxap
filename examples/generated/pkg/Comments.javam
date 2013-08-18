@@ -1,0 +1,27 @@
+package pkg;
+
+import static compiler.util.Quoter.dynamicQuote;
+
+/**
+ * Defines a form of multi-line comment that can be nested.
+ *
+ * e.g. /@ this is level1 /@ this is level2 @/ level1 again @/
+ */
+raw macro NestedComment as multiLineComment
+: "/@"- content:(NestedComment | !"@/" _)* "@/"
+{
+  String comment = "/* " + content[0].string() + " */";
+  return compiler.util.Quoter.dynamicQuote("multiLineComment", "#1", (Object)comment);
+  //return dynamicQuote("multiLineComment", "/* #1 */", content[0].string());
+}
+
+/**
+ * Append !@ in front of an unary expression to comment it out.
+ */
+macro ExpressionComment as multiLineComment
+: "!@" expr:unaryExpression
+{
+  String comment =  "/* " + expr[0].string() + " */";
+  return compiler.util.Quoter.dynamicQuote("multiLineComment", "#1", (Object)comment);
+  //return dynamicQuote("multiLineComment", "/* #1 */", expr[0].string());
+}

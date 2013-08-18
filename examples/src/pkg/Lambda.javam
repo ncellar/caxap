@@ -1,0 +1,38 @@
+package pkg;
+
+import java.util.ArrayList;
+import static trees.MatchSpec.rule;
+
+require my_util.Function;
+
+/**
+ * Syntactic sugar creating a typed anonymous function. The function
+ * is actually represent by an anonymous sub-class of my_util.Function.
+ */
+prioritary macro Lambda as expression
+: "fn" params:formalParameterList ":" outType:referenceType block:block
+{
+  Match[] types = params[0].all(rule("type"));
+  Match[] decls = params[0].all(rule("variableDeclaratorId"));
+  
+  Match classes = `arguments[ ( #@ ||.class, |.class| types ) ]`;
+  
+  ArrayList<Match> bindingsList = new ArrayList<>(types.length); 
+  
+  for (int i = 0 ; i < types.length ; ++i)
+  {
+    bindingsList.add(`blockStatement[
+      #types[i] #decls[i] = (#types[i]) __params__[#i]; ]`);
+  }
+  
+  Match[] bindings = bindingsList.toArray(new Match[types.length]);
+  
+  return `expression[
+    new Function<#outType[0]> #classes {
+  	  public #outType[0] call_implem(Object... __params__) {
+  	    #@||||bindings
+  	    #block[0]
+  	  }
+  	}
+  ]`;
+}

@@ -1,0 +1,279 @@
+%% Twoside is needed for openright, which puts chapters beginning on odd pages.
+\documentclass[a4paper, 11pt, twoside, openright]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+%% Font encoding (how chars are represented in output file).
+%% http://tex.stackexchange.com/questions/664/
+%% http://tex.stackexchange.com/questions/44694/
+\usepackage[T1]{fontenc}
+
+%% Some T1 fonts to use ("ae" package is an alternative).
+\usepackage{lmodern}
+
+%% Better monospace font, needs to appear after lmodern.
+%% incosolata is also nice but does not have single quotes or backtick
+%%  chars to work with the upquote package.
+\usepackage[scaled=0.82]{beramono}
+
+%% In verbatim environments, prints the console single quote and backtick
+%% characters.
+\usepackage{upquote}
+
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{amsfonts}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{color}
+
+%% Like verbatim, but with commands.
+\usepackage{alltt}
+
+%% \FloatBarrier
+\usepackage{placeins}
+
+%% Appendices as chapters in the {appendices} environment.
+\usepackage[toc,page]{appendix}
+
+%% Necessary to be able to put newlines in short captions.
+%% Add option [justification=centering] to center multiline captions,
+%% or use the string inside \captionsetup{} for individual figures.
+\usepackage{caption}
+
+%% Prevent some (not all) huge spaces around some section titles.
+\usepackage[raggedright,compact]{titlesec}
+
+%% Horizontal line below captions.
+\DeclareCaptionFormat{myformat}{#1#2#3\hrulefill}
+\captionsetup[figure]{format=myformat}
+\captionsetup[table]{format=myformat}
+
+%% For nice abstracts (on one page)
+\usepackage{abstract}
+\renewcommand{\abstractnamefont}{\normalfont\Large\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont}
+
+%% Align left rather than justify text.
+% \raggedright
+
+%% A few colors.
+\definecolor{blue}{rgb}{0,0,1}
+\definecolor{black}{rgb}{0,0,0}
+\definecolor{flashyBlue}{rgb}{0,0.5,1}
+\definecolor{brownishRed}{rgb}{0.6,0.1,0.1}
+
+%% Environement to display source code listings.
+\usepackage{listings}
+
+%% Listings defaults. To change them for a single listing, use
+%% \begin{lstlisting}[<args>] where args are like the arguments to \lstset.
+\lstset{
+  aboveskip=0.5cm,
+  % small text, monospace font
+  basicstyle=\ttfamily,
+  % syntax highlighting
+  identifierstyle=\color{black},
+  keywordstyle=\color{blue},
+  stringstyle=\color{brownishRed},
+  commentstyle=\color{flashyBlue}
+}
+
+\lstdefinelanguage[]{caxap}[]{Java}{
+  deletestring=[b]{'}
+}
+
+%% To get line numbers every 5 lines, starting at line 1 (then 5, then 10, ...).
+\newcommand{\commentsfive}{\lstset{numbers = left, stepnumber = 5, firstnumber =
+    1, numberfirstline = true}}
+
+%% Also source code highlights. Better than listings? Need to investigate.
+% \usepackage{minted}
+
+%% No left space at start of paragraph + set inter-paragraph space.
+\usepackage{parskip}
+\setlength{\parskip}{0.5cm}
+
+%% Allows to use literal underscore in text and other places. The strings
+%% argument allows underscore to be used in certain command that work with file
+%% names, such as \input{}.
+\usepackage[strings]{underscore}
+
+%% To use links, both internal and external. Make all links blue (normally red),
+%% including the links to the bibliography, which are normally green.
+\usepackage[colorlinks, allcolors=blue]{hyperref}
+
+%% A kind of box that allow verbatim text inside.
+\usepackage{framed}
+\setlength{\OuterFrameSep}{3mm}
+
+\usepackage{enumitem}
+	\setitemize{itemsep=-1mm}
+	\setenumerate{itemsep=0mm,partopsep=0mm}
+\usepackage{microtype}
+
+\pagestyle{fancy}
+\renewcommand{\sectionmark}[1]{\markright{#1}}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyhf{}
+
+%% Sets the distance between a figure included in the text using the "h" option,
+%% and the text. The "plus" and "minus" parts allow Latex to expand/shrink the
+%% space.
+\setlength{\intextsep}{20.0pt plus 2.0pt minus 2.0pt}
+
+%% Chapter name in left page header, section name in right.
+\fancyhead[LE]{\leftmark}
+\fancyhead[RO]{\rightmark}
+
+%% Footer page numbering.
+\fancyfoot[LE]{\thepage}
+\fancyfoot[RO]{\thepage}
+\pagenumbering{arabic}
+
+%% Makes the lines separating header & footer light grey instead of black.
+\renewcommand{\headrulewidth}{0.1pt}
+\renewcommand{\footrulewidth}{0.1pt}
+
+\addtolength{\textwidth}{3cm}       % text width
+\addtolength{\headwidth}{3cm}       % width of heading on each page
+\addtolength{\textheight}{4cm}      % self explaining (spread by voffset)
+\addtolength{\voffset}{-2cm}        % distance between top and text
+
+\uchyph=0 % forbids splitting words that start with a capital letter
+\linespread{1.1}                    % interline 1.1
+
+\addtolength{\hoffset}{-0.6cm}      % left margin
+%% Lefthand margin on even/odd numbered pages.
+\setlength{\evensidemargin}{\oddsidemargin}
+
+
+\DeclareGraphicsExtensions{.png,.jpg,.bmp,.msp,.pdf,.fig}
+
+\title{
+  \begin{center}
+    \begin{tabular}{lp{2cm}r}
+      \includegraphics[height=4cm]{logo_ucl.png} & &
+      \includegraphics[height=4cm]{logo_epl.png}\\
+    \end{tabular} \\
+    \vspace{\fill}
+    Université Catholique de Louvain \\
+    Ecole Polytechnique de Louvain \\
+    INGI Department \\
+    \vspace{\fill}
+    \textbf{A PEG-Based Macro System for Java}
+    \vspace{\fill}
+    \normalsize \\
+    A thesis submitted to the Université Catholique de Louvain in accordance
+    with the requirements of the degree of Master in Computer Science (120
+    credits).
+    \vspace{\fill}
+  \end{center}
+}
+
+\date{Louvain-la-Neuve, academic year 2012 - 2013}
+ \author{
+   \begin{tabular}{rl}
+     Author         & Nicolas \textsc{Laurent}          \\
+     Supervisor     & Pr. Peter \textsc{Van Roy}        \\
+     Readers        & Dr. Sebastián \textsc{González}   \\
+     and            & Yves \textsc{Jaradin}
+   \end{tabular}
+  }
+
+\begin{document}
+\maketitle
+\cleardoublepage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\label{abstract}
+
+\begin{abstract}
+
+  Programming is abstracting. As such, programming languages supply us with
+  abstraction facilities such as functions and classes. One such facility is the
+  macro. A macro defines new language constructs, to be translated at
+  compile-time into existing constructs. Macros permit the abstraction of
+  patterns that cannot be abstracted by the usual abstraction facilities.
+
+  We introduce caxap, a framework that adds a Lisp-like macro system on top of
+  Java, a programming language with a complex grammar and lacking the property
+  of homoiconicity. Our aim is to be as general as possible, allowing arbitrary
+  syntax to be added to the language, and arbitrary computation to be done to
+  translate the new syntax to the old. To that end, we use parsing expression
+  grammars (PEGs) as tools to reason about and manipulate syntax.
+
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\cleardoublepage
+\renewcommand{\abstractname}{Acknowledgements}
+\begin{abstract}
+  I would first like to thank my friends, which have helped me keep my sanity
+  and my motivation during all these months. I'm thinking of Arnaud Beelen,
+  Adrien Bibal, Etienne Martel, Anthony Popolo Cagnisi, Renaud Proye, Valentin
+  Vansteenberghe and Romain Van Vooren. My thanks extend to my family, which has
+  always supported me.
+
+  I would like to thank my promoter, Peter Van Roy, for the freedom with which
+  he has entrusted me. I hope I used it well. Likewise, I am grateful to
+  Sebastian Gonzalez and Yves Jaradin for accepting the task of being my
+  readers. I also extend my thanks towards Darius Blasband for his judicious
+  remarks. Finally, I'm grateful to all the professors and teaching assistants
+  which imparted their knowledge to me during these five years.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\cleardoublepage
+\thispagestyle{empty}
+\null\vfill
+
+\newlength\longest
+\setlength{\longest}{15cm}
+\centering
+\parbox{\longest}{\Large \raggedright{It is impossible to dissociate language
+    from science or science from language, because every natural science always
+    involves three things: the sequence of phenomena on which the science is
+    based, the abstract concepts which call these phenomena to mind, and the
+    words in which the concepts are expressed. To call forth a concept, a word
+    is needed; to portray a phenomenon, a concept is needed.  All three mirror
+    one and the same reality.}
+
+  \raggedleft{—Antoine Lavoisier, 1789}
+}
+
+\vfill\vfill
+\cleardoublepage
+\raggedright
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\input{macros.tex}
+\input{motivation.tex}
+\input{newpeg.tex}
+\input{user_manual.tex}
+\input{implementation.tex}
+\input{evaluation.tex}
+\input{state_art.tex}
+\input{future_work.tex}
+\input{conclusion.tex}
+
+\begin{appendices}
+\input{grammar.tex}
+\end{appendices}
+
+\bibliographystyle{acmurl}
+\bibliography{biblio}
+
+% Include all unreferenced entries from the bibliography.
+\nocite{*}
+
+All links were originally consulted between February and August 2013, and were
+verified to be in sync with the thesis text on the 12th August 2013.
+
+\end{document}

@@ -1,0 +1,56 @@
+package pkg;
+
+import static trees.MatchSpec.rule;
+
+require my_util.ArraySlice;
+
+/**
+ * The macros in this file define "array slices": the ability to extract
+ * sub-arrays of an array by using the index of the first element and the index
+ * one past the last element. If both index are identical, the slice is empty.
+ *
+ * If the first index is omitted, it defaults to 0. If the last index is
+ * omitted, it default to array.length.
+ *
+ * Index can also be negative, in which case array.length is added to the
+ * negative index to obtain the actual index.
+ *
+ * See example usages in UseArraySlice.java.
+ */
+
+/**
+ * Append to a primaryExpression that yields an array to create a slice.
+ */
+macro SliceSuffix called : "[" (one:expression)? ":" (two:expression)? "]" ; 
+
+/**
+ * Allow SliceSuffix amongst the suffixes  of a suffixedPrimaryExpression.
+ *
+ * Works only with arrays of object types for now.
+ * Could be made to work with primitives, but you need new overloads in
+ * my_util.ArraySlice.
+ */
+prioritary macro ArraySlice as suffixedPrimaryExpression
+: expr:(primaryExpression primaryExpressionSuffix*)
+  suffixes:SliceSuffix
+  (suffixes:primaryExpressionSuffix | suffixes:SliceSuffix)*
+{
+  Match expression = `suffixedPrimaryExpression[ #expr[0] ]`;
+  
+  for (Match suffix : suffixes) {
+  	if (suffix.has(rule("primaryExpressionSuffix"))) {
+      expression = `suffixedPrimaryExpression[ #expression.string() #suffix ]`;
+    }
+    else {
+      Match[] onec = suffix.getCaptures("one");
+      Match[] twoc = suffix.getCaptures("two");
+      Match start = onec.length > 0 ? onec[0] : `expression[ 0 ]`;
+      Match stop  = twoc.length > 0 ? twoc[0] : `expression[ null ]`;
+      
+      expression = `suffixedPrimaryExpression[
+        my_util.ArraySlice.slice(#expression, #start, #stop) ]`;
+    }
+  }
+  
+  return expression;
+}

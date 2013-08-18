@@ -1,0 +1,24 @@
+package pkg;
+
+import java.util.ArrayList;
+import static trees.MatchSpec.rule;
+import my_util.Function;
+prioritary macro Lambda as expression
+: "fn" params:formalParameterList ":" outType:referenceType block:block
+{
+  Match[] types = params[0].all(rule("type"));
+  Match[] decls = params[0].all(rule("variableDeclaratorId"));
+  
+  Match classes = compiler.util.Quoter.dynamicQuote("arguments", "( #@||.class, |.class|1 )", (Object)types);
+  
+  ArrayList<Match> bindingsList = new ArrayList<>(types.length); 
+  
+  for (int i = 0 ; i < types.length ; ++i)
+  {
+    bindingsList.add(compiler.util.Quoter.dynamicQuote("blockStatement", "#1 #2 = (#3) __params__[#4];", (Object)types[i], (Object)decls[i], (Object)types[i], (Object)i));
+  }
+  
+  Match[] bindings = bindingsList.toArray(new Match[types.length]);
+  
+  return compiler.util.Quoter.dynamicQuote("expression", "new Function<#1> #2 {\n  \t  public #3 call_implem(Object... __params__) {\n  \t    #@||||4 #5 }\n  \t}", (Object)outType[0], (Object)classes, (Object)outType[0], (Object)bindings, (Object)block[0]);
+}

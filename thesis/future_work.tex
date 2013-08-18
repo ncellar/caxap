@@ -1,0 +1,515 @@
+\chapter{Future Work}
+\label{future_work}
+
+While caxap is now functional, there are still a lot of improvements that could
+be made. This section looks at all kinds of possible improvements, ranging from
+the trivial to the open problem.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Pattern Matching in Macro Bodies}
+
+When some input is matched by a macro, assigning captures to sub-matches of the
+match tree is a form of decomposition by pattern matching.
+
+It would be useful to allow such pattern matching not only at the macro level,
+but also inside macro bodies. The construct would take a syntactic
+specification, an object representing code, and a body (a list of statements) as
+parameters. It would then proceed to parse the source object with the syntactic
+specification and produce a match tree. It would introduce into the body the
+appropriate lexical bindings for the captures present in the syntactic
+specification.
+
+An open question is whether an existing match tree should be re-parsed to see if
+its code fits the specification, or if the match should fit only if the
+specification matches its current structure.
+
+We could also consider a switch-like construct that would have multiple clauses,
+each clause behaving as described above. You pass this switch-like construct a
+source object and it would try all clauses in turn until one matches. Figure
+\ref{pattern_mock} shows what it could look like.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single,language=caxap]
+switch syntax myMatch {
+  case "if" expr:expression body:body {
+    ...
+  }
+  case "while" expr:expression body:body {
+    ...
+  }
+  default {
+    ...
+  }
+}
+\end{lstlisting}
+\caption{A mock of pattern-matching syntax.}
+\label{pattern_mock}
+\end{figure}
+
+There are no major technical impediments in implementing this, just some glue
+that has to be put together.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Global Program Transformations}
+\label{global_transformations}
+
+Currently, macros can only effect local changes, meaning that the input matching
+a macro is replaced by its expansion. Additionally, macros can have
+side-effects, which can influence the expansion of other macros. But macros
+cannot directly manipulate other parts of the program.
+
+Allowing global transformations is a vague and overly broad agenda. Some
+implications of the idea are clearly problematic. For instance, what happens if
+we add a method to a class that has already been compiled? Clearly, transforming
+other files seems risky. We could restrict ourselves to safer forms of
+transformations, such as modifying the current file, or generating new source
+files.
+
+Current file transformations are quite useful. They would enable an expression
+to add statements before or after the statement the expression belongs to. This
+makes it possible for expressions to introduce lexical bindings. It also helps
+to avoid duplicate sub-expression evaluation.
+
+Imagine we want to define a \texttt{MAX} operator that does not expand to a
+function, such that \texttt{x MAX y} returns the maximum between \texttt{x} and
+\texttt{y}. The naive idea would be to expand to
+[\lstinline{x > y ? x : y}]. But if we replace \texttt{x} and \texttt{y} by
+method calls, this can lead to the repetition of side effects. Instead we could
+expand [\lstinline{int z = m() MAX n();}] to:
+
+\begin{lstlisting}[language=Java]
+int gen_x = m();
+int gen_y = m();
+int z = gen_x > gen_y ? gen_x : gen_y;
+\end{lstlisting}
+
+Current file transformations also allow us to add new methods, fields or nested
+classes to the current class.
+
+To implement current file transformations, we can allow the user to define
+temporary callbacks on some grammar rules. We already have a working callback
+implementation, but restricting the callbacks' lifetime might prove difficult.
+My first idea in the matter is to restrict the callbacks to ancestor rules of
+the macro's rule. The callback would be executed after such a rule successfully
+matched, at which point the callback would be able to modify the resulting match
+tree.
+
+It would also be convenient to provide a few utilities for use within those
+callbacks. For instance a method that, given the match tree for a class
+definition and the match tree for a method definition, adds the method
+definition at the end of the class body.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Recursive Macro Definitions}
+
+caxap macros cannot be recursive in the sense that a macro cannot use itself in
+its own expansion code. There are good reasons for this: expanding a macro
+requires the expansion code to be compiled. Using a macro in its own expansion
+code results in a ``chicken and egg'' situation.
+
+Still, recursive macros are feasible, Lisp has them after all. The key point is
+that in any recursive procedure, there is always a base case that does not
+recurse any further. This means that a recursive macro definition can always
+tells us how to obtain the \emph{base expansion} without expanding any of the
+recursive calls.
+
+Conceptually, the idea is to replace each recursive macro call by something like
+\texttt{eval(expand(match))} where \texttt{eval()} compiles and evaluates some
+Java code, \texttt{expand()} performs macro expansion and \texttt{match} is the
+match for the recursive macro call. This allows us compile our expansion code.
+
+When running the expansion code, each time we encounter \texttt{expand()}, we
+simply call our compiled expansion code. The last recursive \texttt{expand()}
+call will return the base expansion, which can then be evaluated and run as
+code, and so on and so forth.
+
+There are a few obvious pitfalls. First, we can't compile Java expressions; we
+need to wrap them into classes. This is far from trivial, as we need to capture
+all inputs to the macro call, and ensure that all side-effect are correctly
+propagated to the macro body. Second, the scenario is even more complicated in
+the presence of mutually recursive macros, albeit the general principle stays
+the same.
+
+Recursive macro definitions are not something I see coming to caxap. It is a
+very complex feature with few advantages. Most of the time, iteration in the
+macro body or recursion on some helper method can be substituted for macro
+recursion. There are bound to be cases where macro recursion is much more
+expressive, but it is hard to think up an example. The feature is too complex to
+pay for itself. It is also inefficient, since it involves as many compilation
+cycles as recursive calls.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implement Hygiene}
+\label{implem_hygiene}
+
+For a description of hygiene in macro systems, see section \ref{hygiene}.
+
+caxap does not implement hygiene. This is the result from a lack of time and
+from the perceived complexity of the implementation. Here are my current
+thoughts about the issue.
+
+Remember that hygiene is supposed to solve two issues: inadvertantly shadowing
+bindings enclosing the macro expansion, and the capture of free names in the
+macro expansion.
+
+The first problem can be solved by marking all rules that introduce a new
+binding. We can then walk the match tree, renaming all introduced names along
+with all of their uses. It sounds simple, but finding the uses is actually a
+complex matter. It is completely tied to the semantics of Java, and requires a
+lot of logic to implement. It can be done, but I'm not sure if the benefits are
+worth the overhead when compared to simpler schemes.
+
+The standard way to fake hygiene is to generate identifiers, for instance:
+
+\begin{lstlisting}
+Match identifier = generateIdentifier();
+Match quote = `localVariableDeclaration[ int #identifier = 42; ]`;
+\end{lstlisting}
+
+The second problem is almost a non-issue in Java, because we cannot share values
+between compile time and run time. The only binding we need to care about are
+type names. If those are written out using their fully qualified names, the
+problem disappears totally. Writing a full class name can however be bothersome,
+so I'm thinking of writing a function that would automatically produce the full
+class name from the short class name. Assuming, of course, that the short class
+name can be used in the current macro file.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Tooling Support}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{IDEs}
+
+Most Java programmers don't write Java code in their text editor. Instead they
+use an Integrated Development Environment (IDE) to assist them in finding syntax
+mistake and to benefit from auto-completion.
+
+caxap does not play well with IDEs. The IDE does not know about caxap's syntax,
+and about user-defined syntax; it will mark those as syntax errors. Even if IDEs
+degraded their functionalities gracefully, we would lose auto-completion in many
+cases, because classes or member definitions may be the result of a macro
+expansion.
+
+The solution to these problems is simple: write an IDE plugin. This IDE plugin
+would need to run caxap on the source, feed the generated sources to the IDE for
+analysis, and then map the errors back to the caxap sources. This is a whole lot
+of work. By my own somewhat haphazard estimate, it would take as much time as
+was already spent on caxap.
+
+Writing a plugin is hard, but it can be done. After all, people write IDE
+plugins for whole languages. Yet, we would like to work as little as possible to
+implement the plugin, and maximize the reuse of existing Java capabilities in
+the IDE. This is made hard by the way most IDE APIs are designed.
+
+There is as useful tool for Java called Project Lombok \cite{lombok}, which
+implements a few pre-defined macros as Java annotations. The supplied macros
+include things like automatic generation of getters and setters, automatic
+generation of the \texttt{hashCode()}, \texttt{equals()} and \texttt{toString()}
+methods, and more. There are about 15 annotations available in total. The scope
+of the project is pretty small, but it has something that none of the Java macro
+framework presented in section \ref{state_art}, nor caxap, has: it is practical
+and used by a lot of people.
+
+Project Lombok can be integrated with the Java compiler, or with the Eclipse
+IDE, and there are third-party plugins to make it work with the Netbeans and
+IntelliJ Idea IDEs.
+
+The author of Project Lombok, Reinier Zwitserloot, has this to say about the
+implementation \cite{lombok}:
+
+\begin{quote}
+  It's a total hack. Using non-public API. Presumptuous casting (knowing that an
+  annotation processor running in javac will get an instance of
+  JavacAnnotationProcessor, which is the internal implementation of
+  AnnotationProcessor (an interface), which so happens to have a couple of extra
+  methods that are used to get at the live AST).
+
+  On eclipse, it's arguably worse (and yet more robust) - a java agent is used
+  to inject code into the eclipse grammar and parser class, which is of course
+  entirely non-public API and totally off limits.
+
+  If you could do what lombok does with standard API, I would have done it that
+  way, but you can't. Still, for what it's worth, I developed the eclipse plugin
+  for eclipse v3.5 running on java 1.6, and without making any changes it worked
+  on eclipse v3.4 running on java 1.5 as well, so it's not completely fragile.
+\end{quote}
+
+Should I undertake the effort, I would start by implementing some form of
+\emph{source maps}. Source maps are a concept that was pioneered by Mozilla
+\cite{source_maps_home} for use in their Firefox web browser. The idea is that
+Javascript code executed by the browser is often minified (compressed) or is the
+result of the compilation of another language. In order to allow the Javascript
+interpreter to emit sane error messages, the browser can read a \emph{source
+  map} file that maps input positions in the executed Javascript file to input
+positions in the original source file. If you wish to learn more about source
+maps, the website ``HTML5 Rocks'' has an in-depth introduction to the
+topic. \cite{source_maps_expl}
+
+Another functionality offered by IDEs is refactoring. Renaming named code
+entities such as functions or classes accross a source tree is an example of
+refactoring. Macros make refactoring difficult. In fact, syntactic macros make
+refactoring impossible. Refactoring the expanded source is of course not
+meaningful. It should however be possible to make refactoring work with some
+transformative macros.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Other Tools}
+
+The problems with tools extend further than IDEs. There are other tools that
+work on Java sources. Some of these tools will be able to work fine on the
+expanded sources. Other tools may run into problems.
+
+For instance, if a tool verifies that a program satisfies some properties, it
+could happen that the code emitted by a macro - and not under the direct control
+of the user - doesn't satisfy the property. In this case, there is no other
+solution than to edit the macro code.
+
+The output of some tools explicitly refer to source code locations. We run the
+tools on the expanded source, so the output will reference locations in the
+expanded source, not in the original source. The solution is once again to use
+source maps.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \section{Performance Improvement: Breadth-First PEG Parser}
+% \label{perf_bfirst}
+
+% Section \ref{perf} describes the performance issues encountered by our
+% program. One of our conclusions was that reducing the instantaneous memory
+% consumption would speed up the program, as it would reduce the cost of
+% hash-table lookups and reduce the number of re-hashings.
+
+% One solution we imagined to achieve this goal is to develop a breadth-first PEG
+% parsing algorithm. In this case, breadth-first refer to the way the expression
+% graph is traversed. PEGs formalize top-down recursive parsers and so are, almost
+% by definition, implemented by a depth-first algorithm.
+
+% A breadth-first parsing algorithm would mean that, instead of trying the first
+% alternative of a choice, and then the second one only if it fails, we could try
+% all alternatives simultaneously, meaning that for each character (or some larger
+% increment, if that is not practical), we would check if it fits each of the
+% choice's alternative.
+
+% The main difference between a depth-first and breadth-first algorithm is that
+% the depth-first algorithm makes progress on the expression graph, while the
+% breadth-first algorithm makes progress on the input. This means that in the
+% breadth-first algorithm, we know we will never need memoized matches for input
+% positions that precede the current input position. Because of this, the
+% memoization table can be kept much more compact at all times. We can't of course
+% discard all \texttt{ParseData} and \texttt{Match} objects for past input
+% positions, since they might be needed to obtain the final match tree or to
+% display error diagnostics. They can however be discarded once their associated
+% expression is known to fail at their input position.
+
+% The drawback of a breadth-first approach is that it behaves like a worst-case
+% run of the depth-first algorithm: a run where only the last alternative of every
+% choice succeeds. A breadth-first algorithm consequently performs much more
+% operations than a depth-first algorithm. It remains to be seen if the gains from
+% the smaller memoization table can offset the losses caused by the higher number
+% of operations. A breadth-first algorithm with memoization has O(n) complexity,
+% just like a depth-first algorithm.
+
+% At first sight, the fact that PEG choices are prioritized might seem to be
+% hindrance in the algorithm. But to the contrary, this characteristic will in
+% fact allow us to prune the frontier of our breadth-first algorithm: if two
+% alternatives of a rule succeed, prune all possibilities that depend on the
+% lower-priority alternative succeeding.
+
+% If you are familiar with parsing algorithms, it might help to think of this as a
+% version of the Earley parsing algorithm adapted to PEG (taking the \emph{single
+%   parse rule} into account - see section \ref{single_parse_rule}) and using
+% memoization. I have not yet ironed out all the details yet (or else this would
+% not be in the \emph{future works} section).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Operator Precedence Parsing}
+\label{perf_opprec}
+
+If we could compact the expression graph generated from the grammar, we could
+reduce the number of expression tries. This would probably improve performance,
+as explained in section \ref{improve_perf}.
+
+One way to achieve a reduction of the expression graph size would be to specify
+the precedence of each operator that can appear within an expression.
+
+Currently, operator precedence is simulated by having a hierarchy of grammar
+rules. This hierarchy is exhibited in section \ref{expressions_grammar} of the
+appendices. This means that each time we match the \texttt{expression} rule, we
+automatically match the \texttt{assignmentExpression},
+\texttt{conditionalAndExpression}, \texttt{conditionalOrExpression},
+\texttt{additiveExpression}, \texttt{multiplicativeExpression} rules and many,
+many more. And that even if our expressive does not contain assignment,
+conditional operators, addition or multiplication.
+
+An operator precedence parser could help flatten this hierarchy and save on
+memory usage.
+
+As for the implementation, top down operator precedence (TDOP) parsers, also
+known as Pratt parsers, were introduced in 1973 by Vaughan Pratt.
+\cite{pratt1973} It should be possible to combine the ideas from TDOP parsing
+with PEG parsing. Chris Seaton did something similar with Katahdin
+\cite{katahdin}, although I am not sure he did use the ideas from TDOP.
+
+Additionally, the operator precedence mechanism would be a good basis on which
+to build an easier way to define new operators. Currently, defining new
+operators is not especially hard, but not too intuitive either. Figure
+\ref{screwdriver} shows caxap code defining a new infix operator with more
+precedence than addition, but less than multiplication.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single,language=caxap]
+macro SonicScrewdriverExpression called
+: multiplicativeExpresison ("===<oo" multiplicativeExpression)*
+{
+  ... // expansion code
+}
+
+prioritary macro NewAdditiveExpression as additiveExpression
+: SonicScrewdriver (additiveOperator SonicScrewdriver)*
+{
+  return input;
+}
+\end{lstlisting}
+\caption{caxap code defining a new infix operator with more precedence than
+  addition, but less than multiplication.}
+\label{screwdriver}
+\end{figure}
+
+There are two parts in the definition: first we define our operator using
+multiplicative expressions as operands; then we redefine additive operations to
+take ``screwdriver expressions'' as operands.
+
+While the need is not dire, something a bit more natural would be welcome.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Enrich the PEG Parser with new Operators}
+
+In section \ref{peg_formalism}, we describe the \texttt{*+} (\emph{repeat
+  until}), \texttt{++} (\emph{at least once until}) and \texttt{+/} (\emph{list
+  separated by}). In caxap, those are implemented as syntactic sugar: meaning
+they are translated into other operators.
+
+This does not need to be so, and there would in fact be a few advantages to
+implementing these operators directly, as well as introducing new directly
+implemented operators. First, it would make diagnostic messages clearer, since
+it would display the rules exactly as the user wrote them. Second, it would make
+the expression graph and the match tree smaller, potentially improving
+performances. Introducing new operators would also allow us to abstract some
+commonly encountered patterns when using PEG.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{PEG Well-Formedness Checks}
+
+The original PEG paper \cite{ford2004} describes how to check if a grammar is
+well-formed. A grammar is well-formed if it has no rules that are directly or
+indirectly left-recursive. The Mouse parser \cite{redziejowski2009} implements
+the algorithm. In caxap, it could be used to check that user-defined macros do
+not lead to left-recursion.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Excluding Files from caxap}
+
+Some source files do not use macros, and as such, parsing them is a waste of
+time. We could simply parse the prelude (\texttt{import} and \texttt{require}
+statements) and stop if no macros are required. The only problem is that
+quotation is currently implemented as a globally enabled macro.
+
+The solution is to turn quotation into a requirable macro, and to require it
+automatically for macro files.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Better Error Signaling from Macro Bodies}
+
+There are some constraints on syntax which are hard to express via grammar
+rules. In such cases, it is preferable to check those constraints manually from
+within the expansion code. If a constraint is violated, we would like to signal
+an error.
+
+Currently, this can be done by throwing an exception. However, the exceptions
+are not treated specially and simply bubble up to the program's top level. It
+would be better if there was some pretty-printing of the exception message, if
+the faulty macro call could be automatically pinpointed, and if the Java stack
+trace was hidden.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Incremental Compilation}
+
+If we could only re-compile macros and classes which could have changed since
+the last compilation, we could cut down the duration of most compilation cycles
+significantly.
+
+We would need to save the graph of inter-file dependencies to disk during each
+compilation. Then, when a file changes, we only recompile the files that
+(recursively) depend on it.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Macro Expansion in \texttt{import}/\texttt{require} Statements}
+
+It is theoretically possible to expand macros registered as alternatives to
+\texttt{import} and \texttt{require} statements. When we encounter a
+\texttt{require} statement while parsing the prelude, we must suspend our
+parsing, and work towards the compilation of the required file. Given the
+requirement that the dependency graph contains no loop, this can always be
+achieved.
+
+The usefulness of the feature is however dubious. What would be worthwhile is to
+allow macros to appear after the last \texttt{import} or \texttt{require}
+statement, as that limitation is unintuitive. However, finding the end of the
+prelude in the presence of macros is quite tricky. The procedure described above
+would eliminate this problem, since it substitutes a single suspendable parse to
+the current two-parses model (a parse of the prelude and a parse of the whole
+file).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Miscellaneous}
+
+A few items that do not deserve a lot of comment. Some of them have already been
+discussed elsewhere.
+
+\begin{itemize}
+
+\item Improve error reporting. The problem is described in section
+  \ref{error_reporting_manual} of the user manual.
+
+\item Allow octal escape within PEG literals. (Note that hexadecimal Unicode
+  escapes are processed when the file is read into memory, conformingly to the
+  JLS.)
+
+\item Implement \lstinline{Match#startsWith(MatchSpec)} and
+  \lstinline{Match#endsWith(MatchSpec)} match predicates.
+
+\item Pretty print the generated sources.
+
+\item Prefix all packages in the implementation by the reverse of a domain name
+  I own (probably \texttt{eu.norswap.caxap}).
+
+\item Permit caxap to continue, even if encounters a syntax error in one file,
+  as long as this file is not require by another. This is useful when combined
+  with incremental compilation, otherwise we just do exta work for naught.
+
+\item Enforce the fact that a macro's syntactic specification should only refer
+  to another macro's rule if that macro is marked as \texttt{called}.
+
+\item Add a new kind of \texttt{MatchSpec} that corresponds to a parsing
+  expression specified in PEG notation.
+
+\item Users can currently send the macro expander in an infinite loop with a
+  macro that expands to itself. Add a (disablable) timeout to avoid those
+  situations.
+
+\item Two source files can be mutually dependent if neither use macros. Yet, the
+  way the \texttt{require} statement works precludes us from using those files
+  at compile-time. This should change.
+
+\item Both quotation and macro definition could be repackaged as macros, which
+  would be implictly imported into macro files.
+
+\item I might consider doing with macro files entirely, and allowing macro
+  definitions anywhere a class definition can appear. This would make dependency
+  handling more complex, but not impossibly so.
+
+\item Make the parser support left-recursion, as discussed in section
+  \ref{peg_left_recursion}.
+
+\end{itemize}

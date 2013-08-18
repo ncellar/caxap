@@ -1,0 +1,335 @@
+\chapter{Evaluation}
+
+In this chapter, I explain how caxap was tested, and I give an idea of the
+performances that can be expected, along with measurements to back my claims.
+
+To fully assess caxap, we would need to evaluate the user experience it
+provides. Since the software has only now been released, such evaluation will
+have to wait for a little while.
+
+While the software is released and functional, it should be noted that I still
+consider it beta, and that it probably shouldn't be used in production.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Testing}
+\label{testing}
+
+caxap features a suite of unit tests (in the \texttt{test} directory). Like unit
+tests are wont to do, these verify that caxap's modules work according to spec
+when taken in isolation.
+
+Some modules escape the scrutiny of unit testing. These modules are mostly
+related to parsing. To test out the parser and the Java grammar, I ran the
+parser over the whole OpenJDK source tree, which features a massive 20,000 Java
+files.
+
+Because the OpenJDK source also includes test files containing incorrect syntax
+on purpose, I had to manually exclude about 150 source files from the test. I
+only checked about 15 of them manually to see if they indeed contained syntax
+errors, which was the case. All those files appear in test folders, and many of
+them have names that indicate quite explicitly they shouldn't parse. The
+excluded files are listed in the file
+\texttt{src/test/main/OpenJDKExcludes.java}.
+
+Interactions between modules have not been tested as thoroughly as individual
+modules. Some interactions are checked by the unit tests which, for better or
+for worse, don't totally follow the usual doctrine of testing in isolation. The
+unit tests are in fact ordered, so as to test modules that rely on other modules
+only after those have been tested.
+
+Additionally, the examples supplied in the \texttt{examples} directory give some
+confidence that caxap is working as intended.
+
+It is anyhow probable that caxap still contains major bugs, and it should not be
+used in production just yet.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Performance}
+\label{perf}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Setup \& Preliminary Considerations}
+
+All tests were performed on a computer with an Intel Core i7 (860) processor
+running at 2.8 GHz and featuring 4 hyper-threaded core. The computer has 4GB of
+dual-channel DDR3 memory running at 667 MHz.
+
+Most measurements were made on the parser part of caxap. We don't have a big
+enough data set to be able to meaningfully measure the performance of caxap's
+back-end. Section \ref{parser_backend} discusses how the performance of the
+back-end relates to the performance of the parser.
+
+To measure the parser's performance, I ran it over the OpenJDK source tree (see
+section \ref{testing} for details). The OpenJDK source tree contains a bit less
+than 20,000 Java source files, totaling approximately 2,360,000 lines of Java
+code, 1,554,000 lines of comments and 441,000 blank lines. This means that each
+file contains on average 195 non-empty lines.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Profiling}
+\label{perf_profiling}
+
+Before presenting the measurements proper, let's get a sense of where caxap
+spends its time. To do this, we profiled two scenarios: running caxap over the
+\texttt{examples} directory; and running only the parser over caxap's own
+sources.
+
+The profiling data was obtained using Oracle's HPROF \cite{hprof} profiler. The
+profiler can be enabled via the Oracle's JVM options. Here are the options I
+used: [\texttt{-agentlib:hprof=cpu=samples,heap=sites}]. Further analysis of
+this data was made possible by the JPerfAnal tool. \cite{jperfanal} In
+particular, this tool gives us the time spent in functions, inclusive of the
+time spent in callees. By itself, HPROF only gives us the \emph{self time} of
+functions.
+
+Profiling tells us that, in both scenarios, caxap spends most of its time
+allocating memory for temporary objects used during the parse.
+
+The profiling was done using the default JVM heap size (256MB) and our initial
+memoization table implementation (\texttt{NestedMemo}). Section
+\ref{implem_perf} shows that a different memoization strategy
+(\texttt{LimitedMemo}) yields a noticeable performance improvement when parsing
+the OpenJDK source tree. The difference is however not felt when parsing caxap's
+sources. Both strategies also yield exactly the same profiles.
+
+The profiling data is available in the \texttt{measurements} directory, in the
+files with extensions \texttt{.hprof.txt} and \texttt{.jperf.txt}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Memory Consumption}
+\label{hack}
+
+The previous section shows that memory allocation is a sensitive point in our
+application. As it turns out, so is memory consumption.
+
+Some large files can fill up the memoization table to the point where all the
+available heap space is consumed. In that case, we resort to a dirty trick: we
+empty the memoization table and proceed forward with the parse.
+
+We catch the \texttt{OutOfMemoryException} thrown by Java in a method call
+charged with parsing a given parsing expression. If that expression succeeds -
+or if it fails, but does not ultimately cause the parser to backtrack very far -
+then the hack will not have cost us much. If there is significant backtracking
+however, the performance penalty can be sharp.
+
+The biggest file in the OpenJDK source is named \texttt{bigobj.java}. It
+contains 65,563 lines. Most lines contain a \texttt{long} field declaration.
+
+When running caxap on the OpenJDK with a heap size of 256 MB, it spends an
+inordinate of time on \texttt{bigobj.java}, steadily triggering our hack. It
+spent so much time that I in fact cancelled the test, opting to use larger heap
+sizes instead.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Parser Performance}
+\label{implem_perf}
+
+This section presents measurements of the time spent parsing the OpenJDK source
+tree. We made different measurements using different implementations of the
+\texttt{Memo} interface. The implementation determines the memoization strategy
+being used.
+
+For each test case, the time taken to parse each file, as well as the total time
+to parse the source tree, is reported in a file called
+\texttt{measurements/jdk-XXX.txt}, where \texttt{XXX} identifies the test case.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Nested Memoization Table}
+
+The nested memoization table (class \texttt{NestedMemo}) is the memoization
+table implementation I made. It is implemented as two nested hash tables that
+map an \emph{(input position, parsing expression)} pair to a \texttt{ParseData}
+object. The outer hash table maps the input position to an inner hash table
+which maps expressions to parse data. We only memoize rules, not other parsing
+expression.
+
+Table \ref{measurements1} gives the total run time and per-file run times of our
+parser on the OpenJDK source tree. Those measurements were made using three
+different heap sizes: 512 MB, 768 MB and 1 GB.
+
+\begin{table}[here]
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+Heap Size & Total Time & Total (no large) & File Avg. &
+File Avg. (no large) & Nb. Large Files\\
+\hline
+\hline
+512 MB & 33.2 min & 20 min   & 99 ms & 63 ms & 14 \\ \hline
+768 MB & 28 min   & 18.9 min & 84 ms & 57 ms & 8  \\ \hline
+1 GB   & 23.9 min & 17.8 min & 72 ms & 54 ms & 8  \\ \hline
+\end{tabular}
+\caption{Total and per-file run time of caxap's parser on the OpenJDK source
+  tree when using \texttt{NestedMemo}, in function of heap size.}
+\label{measurements1}
+\end{table}
+
+I quickly noticed that the majority of the time was spent on a few files. To get
+a better idea of the general-case performance, I also computed the total and
+average times excluding \emph{large files}. I arbitrarily defined a large file
+to be a file that takes more than 5 seconds to parse. As you can see in table
+\ref{measurements1}, less than 20 files are concerned; but the time difference
+is noticeable.
+
+The reason why large files take a disproportionate amount of time to parse is
+that some of them consume the whole available heap space, and consequently
+trigger the hack described in section \ref{hack}.
+
+To give you an idea: With a heap size of 512 MB, the hack trigger 21 times (8
+times for \texttt{bigobj.java} alone). With a heap size of 1 GB, it triggers
+only 4 times (twice for \texttt{bigobj.java}). \texttt{bigobj.java} takes 223
+seconds to parse with a 512 MB heap, and 209 seconds with a 1 GB heap.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Flat Memoization Table}
+
+The flat memoization table (class \texttt{FlatMemo}) is an attempt to improve
+upon the nested memoization table. It features a single hash table using
+\emph{(input position, parsing expression)} pairs as keys. We only memoize
+rules. The hash code of the key is computed as \texttt{(rule.id << 16) +
+  position}, where \texttt{rule.id} is a unique ID assigned to each rule.
+
+I only tried the flat memoization table with a 768MB heap. The other
+implementation I pitted against it - limited memoization, see next section - did
+much better with the same heap size, so I did not pursue further.
+
+Parsing the whole source tree takes 28.65 minutes, or 17.52 minutes without
+large files, of which there are 9. This makes 86 ms per file, or 53 ms excluding
+large files. This is pretty close to the performance we get when using the
+nested memoization table (84ms and 57ms respectively). It seems that using a
+nested or flat hash table is pretty much irrelevant in our situation, at least
+until more profitable optimizations are applied.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Limited Memoization Table}
+
+The limited memoization table (class \texttt{LimitedMemo}) stores for each rule
+only the last $N$ parses made. This means there are at most 10 input positions
+associated with each rule, putting a known fixed bound on the size of the
+memoization table.
+
+Table \ref{measurements2} shows run time for various values of $N$, using a 768
+MB heap.
+
+\begin{table}[here]
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+$N$ & Total Time & Total (no large) & File Avg. &
+File Avg. (no large) & Nb. Large Files\\
+\hline
+\hline
+4  & 18.9 min & 16 min   & 57 ms & 48 ms & 7 \\ \hline
+8  & 17.6 min & 16.8 min & 53 ms & 51 ms & 5 \\ \hline
+10 & 17.3 min & 16.4 min & 52 ms & 49 ms & 5 \\ \hline
+16 & 18.5 min & 17.8 min & 56 ms & 53 ms & 6 \\ \hline
+\end{tabular}
+\caption{Total and per-file run time of caxap's parser on the OpenJDK source
+  tree, using a limited memoization table and a 768 MB heap.}
+\label{measurements2}
+\end{table}
+
+The heap size seems to be much less relevant than with other memoization
+strategies. Using $N$ = 10, the total run times using a 512 MB heap and a 1 GB
+heap only vary by 0.2 minutes (and not in the direction one might expect). It
+should be noted that, in order to compare the run times for those two cases to
+the run times for other cases, a constant amount of time should be added. This
+is because I - regrettably - removed some useless logic that was run after
+parsing each file, before running these two tests.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Performance in Context}
+
+The measurements show that caxap parses very slowly. Ralph Becket and Zoltan
+Somogyi have measured that both their own Mercury compiler and the Rats! parser
+generator are capable of parsing 9.6 MB of Java files totaling about 900,000
+lines in less than 16 seconds, and in some conditions, as fast as 2
+seconds. \cite{becket2008} The OpenJDK source weighs 274 MB and counts more than
+4 millions lines. We parse it in 17 minutes at best.
+
+This shows that caxap's parser is about two orders of magnitude slower than
+other PEG parsers. However, a direct comparison does not make much sense. First,
+both systems measured by Becket and Zoltan are actually parser generators. They
+do not use the same grammar as we do. (Section \ref{implem_grammar} discusses
+the influence of the grammar on the performances.) These parser generators also
+don't have the same constraints as caxap, such as the necessity to represent the
+grammar as a data structure that can be modified while parsing.
+
+Still, I believe it is possible to improve the parser's performance by at least
+an order of magnitude. Potential solutions are discussed in section
+\ref{improve_perf}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Improving Performances}
+\label{improve_perf}
+
+Very clearly, improving the performances will require strongly reducing the
+amount of memory allocated by the parser.
+
+There are actually a few ways to achieve that. We could try to diminish the
+amount of information we store. We could also hold onto allocated memory in
+order to reuse it. This is known as the \emph{object pool} pattern. Finally, we
+could also forego the gathering of error information until it is certain the the
+file contains an error. Erroneous files would be parsed twice: the second time
+with the objective of diagnosing the error. I expect some of these two measures
+to yield a large speed-up.
+
+There are also more involved ways of reducing memory allocation. Memory is
+allocated each time a parsing expression is tried at an input position. If we
+can reduce the amount of parsing expression and/or the amount of unsuccessful
+tries, we will diminish the amount of memory allocations.
+
+Something that would reduce the number of tries is to automatically factor out
+common prefixes in the grammar. We could then use this simplified grammar to
+parse the input, and finally map the resulting match back to a match conforming
+to the original grammar. This is made more complicated by the fact that the
+expression graph and match trees undergo a fair amount of manipulation during
+the parse. Some of those manipulations are the result of user-specified actions,
+such as adding a new rule to the grammar or expanding a macro. Also, note that
+this optimization is made much less interesting by memoization.
+
+Section \ref{perf_opprec} of the future works proposes an improvement to the
+parsing algorithm that would diminish the size of the grammar significantly and
+hence also the number of tries.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Parser vs Back-End}
+\label{parser_backend}
+
+The profiling we did (described in section \ref{perf_profiling}) indicates that
+caxap spends more time parsing than doing anything else. However, the two
+profiles (using \texttt{NestedMemo} or \texttt{LimitedMemo}) have a large
+variation. The back-end takes a much larger proportion of the time in the
+\texttt{NestedMemo} profile. This could be due to the fact it had to wait on the
+disk longer. It could also be due to imprecisions in HPROF, which uses call
+stack sampling to determine where the program spends its time.
+
+I also measured the time caxap spent in the parser and in the back-end when
+running over the \texttt{examples} directory. The measurements are skewed by the
+small sample size, and also by the fact that Java loads and initializes classes
+lazily; which is why I did not reproduce them here. Nevertheless, they seem to
+indicate that more time is spent in the parser than in back-end. These
+measurements can be found in the
+\texttt{measurements/examples-parser-vs-backend.txt} file.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Complexity Bounds}
+
+In section \ref{peg_memoization}, we said that packrat parsing could parse any
+input in linear time. Does that result hold in practice?
+
+The bound does hold. Considerering the average number of lines per file (195)
+and the average parse time per non-large file (between 48 and 63 ms, depending
+on the case), we can conclude that caxap parses upwards of 3 lines per
+millisecond in non-large files.
+
+Now consider \texttt{bigobj.java} and its 65,000+ lines. Using
+\texttt{LimitedMemo} with $N$ = 10 and a 768 MB heap, it parses in 10,717 ms,
+which means that more than 6 lines are parsed per second. Using nested
+memoization and a 768 MB heap, it parses in 209,455 ms. That's 10 times more
+than we'd naively expect. Yet, that factor of 10 is not too bad. It shows, at
+the very least, that the parser is not quadratic or worse in the input size. We
+can simply put 10 down as the constant factor in the formal definition of
+complexity and say that the linear bound is empirically verified. It should also
+be noted that since the memoization table gets cleared multiple time when
+parsing \texttt{bigobj.java}, the performance is not representative of a
+``real'' packrat parser. For that matter, note that \texttt{LimitedMemo} does
+not implement a proper packrat parser either.

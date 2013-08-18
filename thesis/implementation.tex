@@ -1,0 +1,631 @@
+\chapter{Implementation \& Internals}
+
+In this section, we look at what caxap has under the hood. We start with an
+overview of the whole implementation, and then linger on a few topics that were
+tricky to implement and/or design.
+
+This chapter assumes you have read - and hopefully understood - the user manual
+(chapter \ref{manual}).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Overview of the Architecture}
+
+In this section, we briefly describe how caxap is implemented. We do so by
+giving a cursory overview of each package in the caxap source tree.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{driver}
+
+The \texttt{EntryPoint} class is - unsurprisingly - caxap's entry point. It
+processes command line options and makes them available to other parts of the
+program via the singleton \texttt{Config} class. It then finds all source files
+and uses the \texttt{DependencyResolver} class to order them. Finally, it passes
+control to the class \texttt{CompilationDriver} which will proceed to compile
+and/or expand the files in the given order.
+
+The \texttt{CompilationDriver} has ties to the \texttt{compiler.java} package,
+in order to compile expanded sources and load them in caxap's JVM.
+
+The class \texttt{SourceFile} models each found source file. Each instance of
+\texttt{SourceFile} uniquely identifies a source file. All instances of this
+class must be obtained via the \texttt{SourceRepository} class, which enforces
+the one-to-one mapping between \texttt{SourceFile} instances and files.
+
+Each \texttt{SourceFile} maintains a list of the macros it defines, as well as a
+list of dependencies under the form of a \texttt{Requires} object. Each instance
+also has its own \texttt{SourceParseManager} which calls into the
+\texttt{parser} package to parse either the file prelude or the whole file. The
+file prelude consists of the package declaration and of the
+\texttt{import}/\texttt{require} statements. Parsing the prelude is actually
+delegated to the \texttt{RequiresParser} class.
+
+The \texttt{Context} class makes some data globally accessible to avoid passing
+it over the call stack, or to let callbacks manipulate it.
+
+The \texttt{Hints} class is an early attempt to provide better diagnostics by
+providing some context that can be used in error messages.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{files}
+
+Classes in this package model source files on the disk and how they relate with
+the package structure. The \texttt{Require} class models as ingle
+\texttt{require} statement. These classes are mostly used in the \texttt{driver}
+package.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{grammar}
+\label{implem_grammar}
+
+\texttt{Expression} is the most important class in this package. It models a PEG
+parsing expression. There is one nested class per type of expression.
+
+The base grammar for Java is defined in the \texttt{grammar.java} package, using
+a domain specific language (DSL) defined in \texttt{GrammarDSL}.
+
+In PEG, expressions form graphs, not trees, because of recursion. Building a
+graph in one step is tricky in Java, since you can't use a uninitialized
+variable in its definition. For instance you can't write:
+
+\begin{lstlisting}
+Expression arguments = rule_seq(identifier, opt(comma, arguments));
+\end{lstlisting}
+
+You have to use an explicit reference instead:
+
+\begin{lstlisting}
+Expression arguments = rule_seq(identifier, opt(comma, ref("arguments"));
+\end{lstlisting}
+
+Such references then have to be resolved. This is, among other things, the role
+of the \texttt{ExpressionTreeCleaner} class. It also computes a textual
+representation for the expression, using the notation introduced in sections
+\ref{peg_formalism} and \ref{extended_notation}. Finally, it compacts the graph
+by merging identical expressions. This serves to make memoization more
+efficient.
+
+The \texttt{Grammar} class represents a PEG grammar. Its constructor takes a
+class as parameter (such as those in the \texttt{grammar.java} package), and
+uses reflection to get the rule names from the field names. A grammar keeps a
+map from rule names to the corresponding \texttt{Expression}.
+
+The \texttt{ExpressionVisitor} interface is simply a programming trick that
+allows the implementing classes to specialize some behavior depending on the
+run-time type of an object with static type \texttt{Expression}. Calling
+\texttt{expression.accept(visitor)} will call the appropriate \texttt{visit()}
+method depending on the expression type.
+
+The \texttt{MatchCallbacks} class defines a number of methods called on a
+\texttt{Match} object at different time during its lifetime: when it is
+constructed during the parse, before and after macro expansion.
+
+Callbacks are used to implement some important features, such as compiling and
+registering macro definitions. This means that that if a macro definitions is
+parsed, it must make it to the final match tree, because there is no way to
+unregister a macro if the parser backtracks over the macro definition.
+
+Albeit the feature is not documented, it is possible for users to define their
+own callbacks. In the future, I hope to add some new syntax and functionalities
+to make the feature more transparent.
+
+The \texttt{Expression} and \texttt{ExpressionVisitor} classes are heavily
+inspired by similar classes written by Roman R. Redziejowski for the Mouse PEG
+parser generator. \cite{redziejowski2009}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{source}
+
+The \texttt{Source} interface describes a container of source code. The
+\texttt{SourceStream} class associates a \texttt{Source} object with position
+within that source. Each instance of our parser class is associated to a
+\texttt{Source} object, and uses a \texttt{SourceStream} to keep track of its
+position in the source.
+
+The package also contains a few implementation of the \texttt{Source}
+interface. \texttt{SourceFileText} represents a source file whose contents have
+been read into memory. \texttt{SourceString} represents code contained in a Java
+string. \texttt{SourceComposed} represents code pieced together to support the
+\texttt{MatchCreator.new_match()} methods described in section
+\ref{match_class}.
+
+The \texttt{Source} interface and most of the implementing classes were
+originally written by Roman R. Redziejowski for the Mouse PEG parser
+\cite{redziejowski2009}. I only made minor adaptations to his code.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{grammar.java}
+
+The package comprises five special files starting with the
+\texttt{_<uppercase-leter>_} pattern. The fields in those classes represent the
+rules of the base Java grammar. The grammar was so large that it was indeed
+preferable to split it across multiple files. The lexical ordering hints at the
+inheritance hierarchy: E extends D extends C ...
+
+\texttt{JavaGrammar} extends the E class. The base Java grammar is obtained by
+passing \texttt{JavaGrammar.class} to the constructor of the
+\texttt{grammar.Grammar} class.
+
+The remaining classes are \texttt{grammar.MatchCallbacks} implementations.
+
+\texttt{CallbacksExpression} builds \texttt{Expression} objects from a macro's
+syntactic specification. I hesitated to implement the features as a form of
+bootstrapped macro instead.
+
+\texttt{CallbacksMacroDefinition} handles the compilation and registration of a
+macro right after its definition has been parsed.
+
+\texttt{CallbacksPrelude} expands \texttt{require} statements into
+\texttt{import} statements, or swallows them, in the case of macro requires. In
+practice, it does not really expand anything but rather replaces all
+\texttt{import} and \texttt{require} statements with a list of \texttt{import}
+statement that was computed when the file prelude was first parsed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{parser}
+
+This package holds the implementation of our PEG parser.
+
+The \texttt{Match} class is described in details in sections \ref{match_class}
+and \ref{match_api} of the user manual.
+
+The core of the parser is in the \texttt{Matcher} class. Its constructor takes
+an instance of \texttt{source.Source} and wraps it in a
+\texttt{source.SourceStream}, which can then be used to find a \texttt{Match}
+for a given \texttt{Expression} at the current position in the source.
+
+We tried to keep the code clean, but there is nothing particularly fancy about
+the implementation: we use the memoized depth-first walk of the expression graph
+which is typical of packrat parsers (see section \ref{packrat_parsing} or
+\cite{ford2002}). Memoization is handled by the \texttt{Memo} class. For each
+rule it has to parse, the parser calls the method \texttt{Memo\#get(int position,
+  Expression expr)}. That method either returns a memoized \texttt{ParseData}
+object; either calls back into \texttt{Matcher} to get such an object, which is
+then memoized and returned.
+
+\texttt{Memo} is actually an interface. We supply three implementations of it,
+that each represents a different memoization strategy or implementation. Those
+are \texttt{NestedMemo}, \texttt{FlatMemo} and \texttt{LimitedMemo}. They are
+described in section \ref{implem_perf}.
+
+\texttt{Matcher} implements \texttt{grammar.ExpressionVisitor} in order to parse
+each expression according to its specificities.
+
+Each time the matcher attempts to find an expression match at a given position
+in the source file, a \texttt{ParseData} object is created if none have been
+memoized. This object records whether the match was successful. If it was, it
+holds the corresponding \texttt{Match} object. In all cases, it also holds a
+\texttt{ParseErrors} object containing the encountered parse errors. The error
+reporting strategy is described in section \ref{error_reporting_manual}.
+
+We need the \texttt{ParseData} class in addition to the \texttt{Match} class,
+because \texttt{Match} is not designed to hold temporary information needed
+while parsing. In particular, in case of match failure, we need to record the
+failure and its cause. This is important, because failing to match an expression
+can be explained by failing to match one of its sub-expressions.
+
+Regardless of the result of an expression match, its \texttt{ParseData} is
+merged into the \texttt{ParseData} of its parent: this registers a sub-match in
+case of success, and merges error information.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{trees}
+
+The \texttt{MatchSpec} class is described in section \ref{matchspec_manual}.
+
+The \texttt{MatchFinder} class is the implementation backbone of the
+match-finding methods described in section \ref{finding_submatches}.
+
+\texttt{MatchIterator} and \texttt{BoundedMatchIterator} are two iterator
+implementations used in \texttt{MatchFinder}. \texttt{MatchIterator} simply
+iterates on a match tree depth-first, either left-to-right or
+right-to-left. \texttt{BoundedMatchIterator} encapsulates a
+\texttt{MatchIterator} but only returns the nodes between or outside the
+\emph{left-match} and \emph{right-match} (as described in section
+\ref{finding_submatches}).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{compiler}
+\label{compiler_tour}
+
+This package concerns itself with the compilation of macros and the expansion of
+macro calls.
+
+The \texttt{Macro} class holds all attributes of a macro, as described in the
+user manual.
+
+The \texttt{MacroCompiler} class is responsible for turning a macro into
+compiled bytecode. It requires three key pieces of information: the macro name,
+the expanded macro body, and the list of \texttt{import} statements that should
+be included in the compiled source (derived from the macro file prelude).
+
+The \texttt{compiler.java} package is used to turn the source pieced from these
+pieces of information into bytecode.
+
+A match tree is an immutable structure. The \texttt{MatchTreeTransformer}
+abstract class holds the logic to apply a recursive transformation on a match
+tree, and rebuild only the parts of the tree which have changed. The subtrees
+that have not changed are shared between the new and the old tree. Implementing
+classes just need to implement a method that transforms a single \texttt{Match}.
+
+There are three classes implementing \texttt{MatchTreeTransformer}. The
+\texttt{MacroExpander} class expands encountered macros according to their
+expansion strategies, as described in section \ref{expansion_strategies} (see
+also sections \ref{macro_expansion_intro} and \ref{raw_macros} on macro
+expansion).
+
+The \texttt{PostParseTransformer} and \texttt{PostExpansionTransformer} classes
+from the \texttt{CallbacksTransformers.java} file apply the transformations that
+result from some of the callbacks specified in \texttt{MatchCallbacks} objects.
+
+The \texttt{PostParser} class simply applies the transformations from
+\texttt{PostParseTransformer}, \texttt{MacroExpander} and
+\texttt{PostExpansionTransformer}, in that order.
+
+Finally, the \texttt{QuotationMacro} class is a bootstrapped macro that expands
+the quotation syntax (see section \ref{quotation_manual}) into calls to Java
+methods defined in the \texttt{compiler.util.Quoter} class. We say
+\emph{bootstrapped} macro, because, while it acts exactly like a macro, it was
+hand-coded and not compiled via \texttt{MacroCompiler}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{compiler.java}
+
+The classes in this package interface with the \texttt{javax.tools} package from
+the JDK libraries. \texttt{DynamicJavaCompiler} defines our own interface to the
+compiler, which takes \texttt{javax.tools.JavaFileObject} instances and returns
+a list of \texttt{CompiledClass} instances (one per class defined in the file
+objects).
+
+The \texttt{javax.tools.JavaFileObject} class represents a Java compilation
+unit, meaning a source file. The \texttt{CompiledClass} class represents the
+bytecode obtained by compiling a Java class.
+
+The \texttt{StringJavaFileObject} class extends the
+\texttt{javax.tools.JavaFileObject} class to allow us to use strings as the
+source code of compilation units.
+
+Finally, the \texttt{MemoryClassLoader} is a class loader that can hold the
+bytecode of classes in memory. When searching for a class to load, it will first
+search among the classes whose bytecode is in memory, then only search for
+\texttt{.class} files on the disk.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{compiler.util}
+
+The facilities in \texttt{MatchCreator} are described in section
+\ref{match_class}.
+
+The \texttt{StringMatcher} class holds a small helper method that abstracts away
+the boilerplate needed to match a source string to a grammar rule.
+
+The class \texttt{PEGCompiler} takes a string representing a macro's syntactic
+specification and returns the corresponding \texttt{Expression}. This is
+currently unused except in tests.
+
+Last but not least, the \texttt{Quoter} class implements the quotation
+primitives. The way this class relates to quotation as described in the manual
+is explained in section \ref{implem_quotations}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{compiler.macros}
+
+This is the package in which compiled macros will be placed. It only contains
+the \texttt{MacroInterface} interface, which is the interface that the class
+generated for each macro must implement.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{util and util.apache}
+
+The package holds a collection of data structures and utilities that ease some
+programming tasks, but are not inherently tied to our program's logic.
+
+\texttt{util.apache} has classes extracted from the Apache Commons library. In
+particular, they deal with source code escaping.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The \texttt{require} Statement}
+
+Introduced in section \ref{require_manual} of the user manual, the
+\texttt{require} statement extends the functionality of the \texttt{import}
+statement by explicitly specifying which source file is being depended upon.
+
+Central to understanding the \texttt{require} statement is the notion of
+\emph{dependency}, and the difference between a run-time and compile-time
+dependency. We first describe see how Java handles dependencies before
+explaining how caxap deals with dependencies at compile time.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Dependencies and the Java Compiler}
+
+We describe here how dependencies are handled in Java. This helps explaining why
+we needed to introduce \texttt{require} statements instead of hijacking the Java
+\texttt{import} statement.
+
+We base our discussion on the Oracle Java compiler (\emph{javac}), but most
+things are applicable to all Java compilers targeting the Java Virtual Machine
+(JVM).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Dependencies and \texttt{import} Statements}
+
+The first and foremost thing to understand is that, in Java, the dependencies of
+a class are the set of other classes referenced in the class.
+
+As most people will tell you, \texttt{import} statements are related to
+dependencies. What most people don't realize however, is that, in Java,
+\texttt{import} statement are merely a convenience to avoid using the fully
+qualified name of each class (e.g. using \texttt{List} instead of
+\texttt{java.util.List}). Every \texttt{import} statement in Java could be
+removed at the cost of verbosity. This would not change the class dependencies.
+
+There are two kinds of \texttt{import} statements in Java. Regular
+\texttt{import} statements import a class name from another package. Static
+imports - denoted by the keyword \texttt{static} - import the name of a static
+method, field or class from another class. Both kind can also end with a
+wildcard (\lstinline{'*'}) rather than a name. In that case all classes in the
+package or static members in the class are imported.
+
+When javac encounters an identifier that could potentially be a class name,
+javac will attempt to resolve the identifier as a class in the same package as
+the class being compiled. This means that all classes from the same package are
+implicitly imported in every class.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Dependencies at Compile Time and Run Time}
+
+While dependencies are checked by the compiler at compile time, the result of
+compilation is a set of \texttt{.class} file containing bytecode. There is one
+\texttt{.class} file per class defined in the source file(s). This means that
+the JVM must resolve the dependencies at run time, much like how dynamically
+linked library work. The JVM does this by looking for the appropriate
+\texttt{.class} file on the classpath. The classpath is a list of paths where
+the compiler looks for \texttt{.class} files. The user can add paths to the
+classpath using the command line options of the JVM.
+
+The compiler, which takes a set of source file as input, checks the dependencies
+of those files at compile time. For each import statement, the compiler ensures
+that the imported classes or class members are defined. The compiler looks for
+those in two places. First, inside \texttt{.class} files which are found on the
+classpath. The compiler also looks for definitions in the source files
+themselves, since the relevant source file might not have been compiled to
+\texttt{.class} files yet.
+
+Since a single source file can contain the definition of multiple classes, there
+can be more than one \texttt{.class} file emitted for each source file.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Problems with the \texttt{import} Statements}
+\label{import_problems}
+
+We can't use \texttt{import} statements to specify dependencies between source
+files. First, the aim of \texttt{import} statement is not to specify
+dependencies, but to avoid typing out the fully qualified name of each class
+each time it is used. Second, \texttt{import} statements reference
+classes. There is an asymmetry between classes and source files: a source file
+can contain the definition of multiples classes.
+
+The fully qualified class names used in \texttt{import} statements are also
+ambiguous with regard to the location of the containing source file. Consider
+the statement ``\texttt{import com.company.project.Class;}''. The class
+\texttt{Class} could simply be defined in the file
+\texttt{com/company/project/Class.java}. The class could also be defined in any
+other file in the package, if it isn't public. Worse, it could be defined inside
+the file \texttt{com/company/project.java}, if \texttt{Class} is a nested class
+of the class \texttt{project}. While convention dictates that class names begin
+with an uppercase letter, this is not enforced by the Java compiler.
+
+Even if we were willing to find the file in which a class was defined, it would
+prove to be impossible in the presence of macros. Indeed, a macro call could
+``hide'' the class definition, and we cannot expand macros before resolving
+dependencies.
+
+Clearly, a new syntax was required to deal with source file dependencies.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Why do we need compile-time dependencies?}
+\label{why_source_deps}
+
+As explained in section \ref{require_manual}, we must know of dependencies
+between source files so that we can find a linear ordering of source files. We
+then compile the files in that order.
+
+If a source file uses a macro, then the macro's expansion code needs to be
+compiled before the source file can be compiled. This automatically precludes
+cyclic dependencies between macros: When trying to compile a macro's expansion
+code, we would need the compiled expansion code of another macro, the
+compilation of which would need the compiled expansion code of the macro we were
+trying to compile in the first place.
+
+But wouldn't it still be possible to have cyclic dependencies between macro
+files, as long as there are no cyclic dependencies between macros? The problem
+is that since a macro body can contain macro calls, we can only know where the
+macro body ends after having seen the syntactic specification of the macros it
+calls. But we can't know in advance which macros the body calls; hence we need
+to see all required macros syntactic specification, and thus parse all required
+macros' bodies.
+
+There are a few ways around this. We could specify the macro depended upon at
+the macro definition level. We could move all syntactic specifications to the
+top of the file. Or we could reserve a token to indicate the end of a macro's
+body, which could not be used in user-defined syntax. All those fixes seem to be
+more bothersome than they are worth.
+
+If a macro file uses a class in its expansion code, then this class needs to be
+located by the Java compiler. This means that the compiler must have access to a
+\texttt{.class} for the macro, or to a source file containing its definition. In
+the second case, we still need to fully pre-process the defining source file;
+hence there is still a dependency link.
+
+Dependencies between two regular source files need to be specified for two
+reasons. The first is that they can lead to a transitive dependency on a
+macro. Let A, B be regular source files, and C a macro file. If a A depends on B
+and B depends on C, then C must be compiled before A can be compiled.
+
+Second, caxap compiles files only if they are somehow required for macro
+expansion. If we did not specify a dependency on another source file, we would
+not know we need to compile it.
+
+Currently, files are compiled one at a time. This forbids some well-behaved
+cases such as the following example. Let A, B be regular source files containing
+no macro calls, and C a macro file. C depends on A, A depends on B and B depends
+on A. There is a cyclic dependency between A and B that will be rejected by
+caxap. Yet, this dependency could be encoded using \texttt{import} statement and
+would compile just fine if we supplied both A and B to the Java compiler.
+
+In the future, we might try to produce some kind partial ordering that would
+allow us to compile multiple files together, instead of a total ordering.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Finding Submatches}
+
+The design of the match finding API described in section \ref{match_api} is
+pretty interesting. I wanted to make an API that would make it easy to retrieve
+submatches in a match tree, without needing to refer back to the grammar
+constantly.
+
+The goal of the API is to be able to express the position of a match in the
+exact same way as people think about it. It turns out that if you want to
+describe the location of a match, you'll probably anchor your description to
+some element that precedes or follows that match. You'll use words such as
+\emph{after}, \emph{before} or \emph{between}. If multiple matches satisfy the
+requirements, these prepositions will typically be complemented by words such as
+\emph{first} or \emph{last}.
+
+This explains the overall structure of the API, particularly its
+\emph{first}/\emph{after}/\emph{all} and
+\emph{after}/\emph{before}/\emph{between}/\emph{outside} distinctions.
+
+Moreover, the variety of available \texttt{MachSpec} (see section
+\ref{matchspec_manual}) allows specifying matches even if the exact name of the
+grammar rule is not known. You can express conjunction and disjunction of specs
+with \texttt{AndSpec} and or \texttt{OrSpec}. And of course, if something is
+missing, you can always roll your own \texttt{MatchSpec} implementation.
+
+In our experience - which is at present somewhat limited - the system succeeds
+at making most request terse and intuitive. The approach does have a drawback in
+that it is not overly efficient, since it is basically a tree search.
+
+The idea of finding data in an annotated tree is not a new idea. In fact, it is
+rather pervasive: the cascading stylesheet language (CSS) \cite{css_page} used
+on almost every website is constructed around this idea. CSS tries to match HTML
+tags to apply styling on them. CSS uses the term \emph{selector} instead of
+\emph{specification}.
+
+There are differences however. First, CSS is skewed toward matching potentially
+large set of scattered items, whereas we tend to more stringent in our
+requirements. Unique HTML tags in a page layout are given a unique \emph{id},
+which further simplifies CSS' task. Another difference is that CSS match items
+recursively, which makes sense in its context.
+
+There are other query languages operating on trees that work somewhat
+similarly. One example is the XPath query language \cite{xpath}, which is part
+of the XSLT (Extensible Stylesheet Language Transformations) language.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Quotations}
+\label{implem_quotations}
+
+The most difficult thing about quotations is understanding how they work. After
+that, implementing them is not all that hard, if you get the right ideas.
+
+As mentioned in section \ref{compiler_tour}, the quotation syntax acts like a
+macro, implemented in \texttt{compiler.QuotationMacro}.
+
+Simple quotations expand to the \texttt{compiler.util.Quoter.primitiveQuote()}
+method. For instance, \lstinline{'expression[ 42 ]'} expands to
+\texttt{primitiveQuote("expression", "42")}. The first parameter is a rule name,
+and the second is the source fragment, escaped so as to form a valid Java
+string.
+
+\texttt{primitiveQuote()}, which is overloaded, can also take a list of
+\texttt{MatchSpec} objects as a list or as a variadic parameter. The method
+checks if the match resulting from the quotation satisfies all passed
+specs. This parameter is not used for simple quotations.
+
+Quasiquotations expand to the \texttt{compiler.util.Quoter.dynamicQuote()}
+method. For instance, \lstinline{`expression[ 1337 + #method() ]`} expands to
+\lstinline{dynamicQuote("expression", "1337 + #1", method())}. The reformulation
+is necessary in order to evaluate unquoted expression in Java. The
+\texttt{dynamicQuote()} method inserts the result of all unquoted expressions
+into the source fragment, before passing it to \texttt{primitiveQuote()}. If the
+unquoted expression is a \texttt{Match}, \texttt{dynamicQuote()} also constructs
+a special \texttt{MatchSpec} instance that ensures that the match appears as a
+submatch in the quotation's result, and passes this spec to
+\texttt{primitiveQuote()}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Java Grammar}
+\label{our_java_grammar}
+
+The PEG grammar used to parse the Java language is entirely hand crafted. There
+are a few PEG grammars for Java to be found online, namely as part of the
+Parboiled \cite{parboiled}, Mouse \cite{redziejowski2009} and Rats!
+\cite{grimm2006} PEG parsers. None truly satisfied me: The Parboiled grammar was
+for Java 6; the Rats! grammar used a copious amount of Rats! specific extensions
+and both the Mouse and Parboiled grammars was based upon the CFG grammar from
+the Java Language Specification \cite{jls} which is explicitly designed to
+minimize lookahead. I also found a few errors in the Mouse grammar, which is the
+only grammar I thoroughly scrutinized.
+
+My idea for the perfect Java grammar was that it should reflect how one thinks
+about the language. In other words, the grammar should map cleanly to our
+intuitions about the language. It should also be highly granular: since each
+rule is a potential macro insertion point, there should be enough rules to
+capture all the places where a user might want to insert a macro, and the rules
+should represent meaningful Java entities. There should not be too large a
+divide between the syntactic and semantic view of the language.
+
+Unfortunately, grammars designed to minimize lookahead violate those principles,
+notably by \emph{factoring out} common prefixes of rules. This means that we are
+left with very grave gaps: there are for instance no rule that designate array
+access or method invocation directly. Instead, we have a rule with an identifier
+as prefix, which is followed by any number of suffixes such as array access or
+method invocations. In the context of our macro system, that does constitute a
+problem.
+
+Yet, my grammar is not devoid of problems. First, it ended up picking some of
+the gaps highlighted above because the PEG formalism does not support left
+recursion. While we can emulate left-recursion using the ``prefix followed by a
+repetition of suffixes'' pattern, left-recursion produces a nesting of rules
+that properly associates each array access / method invocation with its prefix
+operand. As explained in section \ref{peg_left_recursion}, there are ways to
+introduce left recursion, but I chose to move on with the implementation
+instead.
+
+The example from \texttt{examples/src/pkg/ArraySlice.javam} shows the hoops one
+has to jump through in the absence of left-recursion. It's not quite
+insurmountable (the whole macro definition is less than 30 lines), but it
+requires some careful thinking.
+
+Second, it made my grammar too specific. Each programming languages has
+constraints on valid programs that cannot be expressed by a grammar, such as
+typing constraints. There are other constraints which can be expressed by
+grammars, but are best left out. Consider for instance modifier keywords such as
+\texttt{private}, \texttt{abstract}, etc. Not all keywords are allowed for all
+constructs, the keywords can appear in any order, but each keyword cannot appear
+more than once per construct. This is a distinctively non-trivial set of
+constraints to embed in a grammar, yet I tried nonetheless. It was a bad idea,
+as that made the grammar much more complicated than it should have been. On the
+bright side, my grammar is the most precise computer-readable specification of
+Java 7 syntax that I am aware of.
+
+The grammar probably still contains a few problems I failed to discover.
+However, the fact that we succeed in parsing the whole OpenJDK source tree at
+least gives us some confidence in the grammar's correctness (see section
+\ref{testing} for details).
+
+Because the source also includes test files containing incorrect syntax on
+purpose, I had to manually exclude about 150 source files from the test. I only
+checked about 15 of them manually to see if they indeed contained syntax error,
+which was the case. All those files appear in test folders, and many of them
+have names that indicate quite explicitly they shouldn't parse. The excluded
+files are listed in the file \texttt{src/test/main/OpenJDKExcludes.java}.
+
+Finally, it is quite clear that the design of the grammar impacts performance
+negatively. First, because the grammar tries to map to semantic constructs and
+does not factor out common prefixes, it makes memoization absolutely
+essential. Without it, exponential behavior kicks in and yields absolutely
+preposterous parse times. Contrast this with the Mouse \cite{redziejowski2009}
+parser generator, whose author says performs best with a very limited amount of
+memoization. With Mouse, doing no memoization at all consistently outperforms
+full memoization. We expand on our performance problems in section \ref{perf}.

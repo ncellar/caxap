@@ -1,0 +1,8 @@
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc
+reports/
+target/

@@ -1,0 +1,839 @@
+\chapter{The Base caxap Grammar}
+\label{grammar}
+
+Here is the full grammar that caxap uses to parse source file. The grammar
+includes a full grammar for the Java language (sections \ref{lexical_grammar}
+through \ref{statements_grammar}), as well as a grammar for the caxap-specific
+additions (sections \ref{requires_grammar} and \ref{macrodefinitions_grammar}).
+
+This grammar was automatically generated from the source files used to do the
+parsing, using the \texttt{grammar.GrammarPrinter} class.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Lexical Grammar}
+\label{lexical_grammar}
+
+This describes the lexical structure of the Java language, based on section 2.2
+of the Java Language Specification (JLS) version 7 :
+\url{http://docs.oracle.com/javase/specs/jls/se7/html/jls-2.html#jls-2.2}
+
+See the class \texttt{grammar.java._A_Lexical} for more details and comments.
+
+\hrulefill
+
+\begin{lstlisting}[breaklines=true]
+hexDigit ::= [a-f] | [A-F] | [0-9]
+
+whiteSpace ::= [ \t\r\n\f]+
+
+multiLineComment ::= "/*" (!"*/" _ )* "*/"
+
+singleLineComment ::= "//" (![\r\n] _ )* [\r\n]
+
+spacing ::= (whiteSpace+ | multiLineComment | singleLineComment)*
+
+aspacing ::= spacing
+
+fspacing ::= (whiteSpace | multiLineComment | singleLineComment)+
+
+afspacing ::= fspacing
+
+letter ::= [a-z] | [A-Z] | [_$]
+
+letterOrDigit ::= letter | [0-9]
+
+_true ::= "true" !letterOrDigit  spacing
+
+_false ::= "false" !letterOrDigit  spacing
+
+booleanLiteral ::= _true | _false
+
+_null ::= "null" !letterOrDigit  spacing
+
+_boolean ::= "boolean" !letterOrDigit  spacing
+
+_byte ::= "byte" !letterOrDigit  spacing
+
+_char ::= "char" !letterOrDigit  spacing
+
+_double ::= "double" !letterOrDigit  spacing
+
+_float ::= "float" !letterOrDigit  spacing
+
+_int ::= "int" !letterOrDigit  spacing
+
+_long ::= "long" !letterOrDigit  spacing
+
+primitiveType ::= _boolean | _byte | _char | _double | _float | _int | _long
+
+lexNonTypeKeyword ::= ("abstract" | "assert" | "break" | "case" | "catch" | "class" | "const" | "continue" | "default" | "do" | "else" | "enum" | "extends" | "finally" | "final" | "for" | "goto" | "if" | "implements" | "import" | "interface" | "instanceof" | "native" | "new" | "package" | "private" | "protected" | "public" | "return" | "static" | "strictfp" | "super" | "switch" | "synchronized" | "this" | "throws" | "throw" | "transient" | "try" | "void" | "volatile" | "while") !letterOrDigit  spacing
+
+lexLiteralWord ::= _true | _false | _null
+
+keyword ::= primitiveType | lexNonTypeKeyword | lexLiteralWord
+
+identifier ::= !keyword letter letterOrDigit*  spacing
+
+hexDigits ::= hexDigit ([_]* hexDigit )*
+
+hexNumeral ::= ("0x" | "0X") hexDigits
+
+binaryNumeral ::= ("0b" | "0B") [01] ([_] [01] )*
+
+octalNumeral ::= "0" ([_]* [0-7] )+
+
+decimalNumeral ::= "0" | [1-9] ([_]* [0-9] )*
+
+integerLiteral ::= (hexNumeral | binaryNumeral | octalNumeral | decimalNumeral) [lL]?  spacing
+
+parseIntNumber ::= (plus | minus)? [0-9]+
+
+hexSignificand ::= ("0x" | "0X") hexDigits? "." hexDigits  | hexNumeral "."?
+
+digits ::= [0-9] ([_]* [0-9] )*
+
+binaryExponent ::= [pP] [+\\-]? digits
+
+hexFloat ::= hexSignificand binaryExponent [fFdD]?
+
+exponent ::= [eE] [+-]? digits
+
+decimalFloat ::= digits "." digits? exponent? [fFdD]?  | "." digits exponent? [fFdD]?  | digits exponent [fFdD]?  | digits exponent? [fFdD]
+
+floatLiteral ::= (hexFloat | decimalFloat) spacing
+
+octalEscape ::= [0-3] [0-7] [0-7]  | [0-7] [0-7]  | [0-7]
+
+escape ::= "\\" ([btnfr\"'\\] | octalEscape)
+
+charLiteralNoQuotes ::= escape | !['\\\n\r] _
+
+charLiteral ::= "'" charLiteralNoQuotes "'"  spacing
+
+stringLiteralContent ::= (escape | ![\"\\\n\r] _ )*
+
+stringLiteral ::= "\"" stringLiteralContent "\""  spacing
+
+literal ::= charLiteral | floatLiteral | integerLiteral | stringLiteral | booleanLiteral | _null
+
+lAnBra ::= "<" spacing
+
+lCuBra ::= "{" spacing
+
+lPar ::= "(" spacing
+
+lSqBra ::= "[" spacing
+
+rAnBra ::= ">" spacing
+
+rCuBra ::= "}" spacing
+
+rPar ::= ")" spacing
+
+rSqBra ::= "]" spacing
+
+plus ::= "+" ![=+]  spacing
+
+minus ::= "-" ![=-]  spacing
+
+star ::= "*" ![=]  spacing
+
+slash ::= "/" ![=]  spacing
+
+percent ::= "%" ![=]  spacing
+
+plusEq ::= "+=" spacing
+
+minusEq ::= "-=" spacing
+
+starEq ::= "*=" spacing
+
+slashEq ::= "/=" spacing
+
+modEq ::= "%=" spacing
+
+plusPlus ::= "++" spacing
+
+minusMinus ::= "--" spacing
+
+pipe ::= "|" ![=|]  spacing
+
+and ::= "&" ![=&]  spacing
+
+hat ::= "^" ![=]  spacing
+
+hatEq ::= "^=" spacing
+
+sl ::= "<<" ![=]  spacing
+
+sr ::= ">>" ![=>]  spacing
+
+bsr ::= ">>>" ![=]  spacing
+
+pipeEq ::= "|=" spacing
+
+andEq ::= "&=" spacing
+
+slEq ::= "<<=" spacing
+
+srEq ::= ">>=" spacing
+
+bsrEq ::= ">>>=" spacing
+
+tilde ::= "~" spacing
+
+bang ::= "!" ![=]  spacing
+
+andAnd ::= "&&" spacing
+
+orOr ::= "||" spacing
+
+eqEq ::= "==" spacing
+
+notEq ::= "!=" spacing
+
+ge ::= ">=" spacing
+
+gt ::= ">" ![=>]  spacing
+
+le ::= "<=" spacing
+
+lt ::= "<" ![=>]  spacing
+
+at ::= "@" spacing
+
+colon ::= ":" spacing
+
+comma ::= "," spacing
+
+dot ::= "." spacing
+
+ellipsis ::= "..." spacing
+
+eq ::= "=" ![=]  spacing
+
+qMark ::= "?" spacing
+
+semi ::= ";" spacing
+
+_abstract ::= "abstract" !letterOrDigit  spacing
+
+_assert ::= "assert" !letterOrDigit  spacing
+
+_break ::= "break" !letterOrDigit  spacing
+
+_case ::= "case" !letterOrDigit  spacing
+
+_catch ::= "catch" !letterOrDigit  spacing
+
+_class ::= "class" !letterOrDigit  spacing
+
+_continue ::= "continue" !letterOrDigit  spacing
+
+_default ::= "default" !letterOrDigit  spacing
+
+_do ::= "do" !letterOrDigit  spacing
+
+_else ::= "else" !letterOrDigit  spacing
+
+_enum ::= "enum" !letterOrDigit  spacing
+
+_extends ::= "extends" !letterOrDigit  spacing
+
+_finally ::= "finally" !letterOrDigit  spacing
+
+_final ::= "final" !letterOrDigit  spacing
+
+_for ::= "for" !letterOrDigit  spacing
+
+_if ::= "if" !letterOrDigit  spacing
+
+_implements ::= "implements" !letterOrDigit  spacing
+
+_import ::= "import" !letterOrDigit  spacing
+
+_interface ::= "interface" !letterOrDigit  spacing
+
+_instanceof ::= "instanceof" !letterOrDigit  spacing
+
+_native ::= "native" !letterOrDigit  spacing
+
+_new ::= "new" !letterOrDigit  spacing
+
+_package ::= "package" !letterOrDigit  spacing
+
+_private ::= "private" !letterOrDigit  spacing
+
+_protected ::= "protected" !letterOrDigit  spacing
+
+_public ::= "public" !letterOrDigit  spacing
+
+_return ::= "return" !letterOrDigit  spacing
+
+_static ::= "static" !letterOrDigit  spacing
+
+_strictfp ::= "strictfp" !letterOrDigit  spacing
+
+_super ::= "super" !letterOrDigit  spacing
+
+_switch ::= "switch" !letterOrDigit  spacing
+
+_synchronized ::= "synchronized" !letterOrDigit  spacing
+
+_this ::= "this" !letterOrDigit  spacing
+
+_throw ::= "throw" !letterOrDigit  spacing
+
+_throws ::= "throws" !letterOrDigit  spacing
+
+_transient ::= "transient" !letterOrDigit  spacing
+
+_try ::= "try" !letterOrDigit  spacing
+
+_void ::= "void" !letterOrDigit  spacing
+
+_volatile ::= "volatile" !letterOrDigit  spacing
+
+_while ::= "while" !letterOrDigit  spacing
+
+\end{lstlisting}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Expressions Grammar}
+\label{expressions_grammar}
+
+This describes expressions in the Java language. See the class
+\texttt{grammar.java._B_Expressions} for more details and comments.
+
+\hrulefill
+
+\begin{lstlisting}[breaklines=true]
+square ::= lSqBra rSqBra
+
+diamond ::= lAnBra rAnBra
+
+qualifiedIdentifier ::= identifier (dot identifier )*
+
+arrayType ::= (primitiveType | classType) square+
+
+referenceType ::= arrayType | classType
+
+typeArgument ::= referenceType | qMark ((_extends | _super) referenceType )?
+
+typeArguments ::= lAnBra typeArgument (comma typeArgument )*  rAnBra
+
+nonWildcardTypeArguments ::= lAnBra referenceType (comma referenceType )*  rAnBra
+
+classType ::= identifier typeArguments?  (dot identifier typeArguments?  )*
+
+nonGenericClassType ::= qualifiedIdentifier
+
+typeBound ::= classType (and classType )*
+
+typeParameter ::= identifier (_extends typeBound )?
+
+typeParameters ::= lAnBra typeParameter (comma typeParameter )*  rAnBra
+
+type ::= referenceType | primitiveType
+
+parExpression ::= lPar expression rPar
+
+arguments ::= lPar (expression (comma expression )* )? rPar
+
+qualifiedMethodName ::= (qualifiedIdentifier dot )? nonWildcardTypeArguments identifier  | qualifiedIdentifier
+
+instanceSpecifier ::= (nonGenericClassType dot )? (_this _super?  | _super)
+
+thisInstanceSpecifier ::= (nonGenericClassType dot )? _this
+
+instantiatedMethodName ::= (instanceSpecifier dot )? qualifiedMethodName
+
+primaryMethodInvocation ::= instantiatedMethodName arguments
+
+qualifiedSuperConstructorInvocation ::= suffixedPrimaryExpression dot nonWildcardTypeArguments? _super arguments
+
+unqualifiedConstructorInvocation ::= nonWildcardTypeArguments? (_this | _super) arguments
+
+constructorInvocation ::= unqualifiedConstructorInvocation | qualifiedSuperConstructorInvocation
+
+instantiatedFieldAccess ::= instanceSpecifier dot qualifiedIdentifier
+
+regularFieldAccess ::= qualifiedIdentifier
+
+variableInitializer ::= expression | arrayInitializer
+
+arrayInitializer ::= lCuBra (variableInitializer (comma variableInitializer )* )? comma? rCuBra
+
+squareExpr ::= lSqBra expression rSqBra
+
+arrayCreator ::= (classType | primitiveType) (square+ arrayInitializer  | squareExpr+ square* )
+
+diamondCreator ::= nonGenericClassType diamond arguments classBody?
+
+nonDiamondCreator ::= nonWildcardTypeArguments? nonGenericClassType nonWildcardTypeArguments? arguments classBody?
+
+nonArrayCreator ::= diamondCreator | nonDiamondCreator
+
+creator ::= nonArrayCreator | arrayCreator
+
+voidClass ::= _void dot _class
+
+typeClass ::= type dot _class
+
+primaryExpression ::= parExpression | _new creator  | literal | typeClass | voidClass | primaryMethodInvocation | instantiatedFieldAccess | thisInstanceSpecifier | regularFieldAccess
+
+arrayAccessExpression ::= primaryExpression squareExpr*
+
+methodInvocationSuffix ::= dot qualifiedMethodName arguments
+
+innerCreatorSuffix ::= dot _new nonArrayCreator
+
+primaryExpressionSuffix ::= methodInvocationSuffix | dot identifier  | innerCreatorSuffix | squareExpr
+
+suffixedPrimaryExpression ::= primaryExpression primaryExpressionSuffix*
+
+innerCreator ::= primaryExpression (!(!innerCreatorSuffix primaryExpressionSuffix !primaryExpressionSuffix ) primaryExpressionSuffix )+
+
+nonPrimaryMethodInvocation ::= primaryExpression (!(!methodInvocationSuffix primaryExpressionSuffix !primaryExpressionSuffix ) primaryExpressionSuffix )+
+
+nonPrimaryLeftHand ::= primaryExpression (!(!(dot identifier !arguments  | squareExpr) primaryExpressionSuffix !primaryExpressionSuffix ) primaryExpressionSuffix )+
+
+leftHandSide ::= nonPrimaryLeftHand | lPar leftHandSide rPar  | instantiatedFieldAccess | regularFieldAccess
+
+preIncrementExpression ::= plusPlus leftHandSide
+
+preDecrementExpression ::= minusMinus leftHandSide
+
+postIncrementExpression ::= leftHandSide plusPlus
+
+postDecrementExpression ::= leftHandSide minusMinus
+
+incrementExpression ::= preIncrementExpression | preDecrementExpression | postIncrementExpression | postDecrementExpression
+
+typeCast ::= lPar type rPar unaryExpression
+
+unaryExpression ::= typeCast | incrementExpression | plus unaryExpression  | minus unaryExpression  | tilde unaryExpression  | bang unaryExpression  | suffixedPrimaryExpression | quotationm
+
+multiplicativeOperator ::= star | percent | slash
+
+multiplicativeExpression ::= unaryExpression (multiplicativeOperator unaryExpression )*
+
+additiveOperator ::= plus | minus
+
+additiveExpression ::= multiplicativeExpression (additiveOperator multiplicativeExpression )*
+
+shiftOperator ::= sl | sr | bsr
+
+shiftExpression ::= additiveExpression (shiftOperator additiveExpression )*
+
+comparisonOperator ::= le | ge | lt | gt
+
+relationalExpression ::= shiftExpression (comparisonOperator shiftExpression  | _instanceof referenceType )*
+
+equalityOperator ::= eqEq | notEq
+
+equalityExpression ::= relationalExpression (equalityOperator relationalExpression )*
+
+bitwiseAndExpression ::= equalityExpression (and equalityExpression )*
+
+bitwiseExclusiveOrExpression ::= bitwiseAndExpression (hat bitwiseAndExpression )*
+
+bitwiseOrExpression ::= bitwiseExclusiveOrExpression (pipe bitwiseExclusiveOrExpression )*
+
+conditionalAndExpression ::= bitwiseOrExpression (andAnd bitwiseOrExpression )*
+
+conditionalOrExpression ::= conditionalAndExpression (orOr conditionalAndExpression )*
+
+conditionalExpression ::= conditionalOrExpression (qMark expression colon conditionalExpression )?
+
+assignmentOperator ::= eq | plusEq | minusEq | starEq | slashEq | andEq | pipeEq | hatEq | modEq | slEq | srEq | bsrEq
+
+assignment ::= leftHandSide assignmentOperator expression
+
+assignmentExpression ::= assignment | conditionalExpression
+
+expression ::= assignmentExpression
+
+elementValueArrayInitializer ::= lCuBra (elementValue (comma elementValue )* )? comma? rCuBra
+
+elementValue ::= conditionalExpression | annotation | elementValueArrayInitializer
+
+elementValuePair ::= identifier eq elementValue
+
+normalAnnotation ::= at qualifiedIdentifier lPar (elementValuePair (comma elementValuePair )* )? rPar
+
+singleElementAnnotation ::= at qualifiedIdentifier lPar elementValue rPar
+
+markerAnnotation ::= at qualifiedIdentifier
+
+annotation ::= normalAnnotation | singleElementAnnotation | markerAnnotation
+
+\end{lstlisting}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Statements Grammar}
+\label{statements_grammar}
+
+This describes the syntax of statements and declarations in the Java
+language. See the class \texttt{grammar.java._C_Statements} for more details and
+comments.
+
+This describes expressions in the Java language.
+
+\hrulefill
+
+\begin{lstlisting}[breaklines=true]
+variableDeclaratorId ::= identifier square*
+
+variableDeclarationPrefix ::= annotation* (_final annotation* )? type
+
+variableDeclarator ::= variableDeclaratorId (eq variableInitializer )?
+
+localVariableDeclaration ::= variableDeclarationPrefix variableDeclarator (comma variableDeclarator )*
+
+methodInvocation ::= nonPrimaryMethodInvocation | primaryMethodInvocation
+
+statementExpression ::= assignment | incrementExpression | methodInvocation | innerCreator | _new creator  | innerCreator
+
+classDeclarationPrefix ::= annotation* (_final | _abstract)? annotation*
+
+abstractClassDeclarationPrefix ::= annotation* _abstract? annotation*
+
+blockStatement ::= localVariableDeclaration semi  | classDeclarationPrefix classDeclaration  | abstractClassDeclarationPrefix abstractClassDeclaration  | statement
+
+block ::= lCuBra blockStatement* rCuBra
+
+formalParameter ::= variableDeclarationPrefix variableDeclaratorId
+
+forInit ::= localVariableDeclaration | statementExpression (comma statementExpression )*
+
+forUpdate ::= statementExpression (comma statementExpression )*
+
+forStatement ::= _for lPar forInit? semi expression? semi forUpdate? rPar statement
+
+forEachStatement ::= _for lPar formalParameter colon expression rPar statement
+
+whileStatement ::= _while parExpression statement
+
+doWhileStatement ::= _do statement _while parExpression semi
+
+catchBlock ::= _catch lPar variableDeclarationPrefix (pipe type )* variableDeclaratorId rPar block
+
+finallyBlock ::= _finally block
+
+tryStatement ::= _try block (catchBlock+ finallyBlock?  | finallyBlock)
+
+resourceDeclaration ::= formalParameter eq expression
+
+tryWithResourcesStatement ::= _try lPar resourceDeclaration (semi resourceDeclaration )*  semi? rPar block catchBlock* finallyBlock?
+
+assertion ::= _assert expression (colon expression )? semi
+
+ifStatement ::= _if parExpression statement (_else statement )?
+
+constantExpression ::= expression
+
+enumConstantName ::= identifier
+
+switchLabel ::= (_case (constantExpression | enumConstantName)  | _default) colon
+
+switchBlockStmtGroup ::= switchLabel blockStatement*
+
+switchStatement ::= _switch parExpression lCuBra switchBlockStmtGroup* rCuBra
+
+synchronizedBlock ::= _synchronized parExpression block
+
+returnStatement ::= _return expression? semi
+
+throwStatement ::= _throw expression semi
+
+breakStatement ::= _break identifier? semi
+
+continueStatement ::= _continue identifier? semi
+
+labeledStatement ::= identifier colon statement
+
+statement ::= block | assertion | ifStatement | forStatement | forEachStatement | whileStatement | doWhileStatement | tryStatement | tryWithResourcesStatement | switchStatement | synchronizedBlock | returnStatement | throwStatement | breakStatement | continueStatement | semi | labeledStatement | statementExpression semi
+
+ellipsisParameter ::= variableDeclarationPrefix ellipsis identifier
+
+formalParameterList ::= lPar (formalParameter (comma formalParameter )*  (comma ellipsisParameter )?  | ellipsisParameter)? rPar
+
+methodBody ::= block
+
+methodDeclarationPrefix ::= typeParameters? (_void identifier formalParameterList  | type identifier formalParameterList square* ) (_throws classType (comma classType )*  )?
+
+methodDeclaration ::= methodDeclarationPrefix methodBody
+
+abstractMethodDeclaration ::= methodDeclarationPrefix semi
+
+constructorBody ::= lCuBra constructorInvocation? blockStatement* rCuBra
+
+constructorDeclaration ::= typeParameters? identifier formalParameterList (_throws classType (comma classType )*  )? constructorBody
+
+fieldDeclaration ::= type variableDeclarator (comma variableDeclarator )*  semi
+
+accessibilityModifier ::= _public | _protected | _private
+
+accessibilityRestricter ::= _protected | _private
+
+nestedEnumModifier ::= annotation | accessibilityModifier | _static | _strictfp
+
+topLevelEnumModifier ::= annotation | _public | _strictfp
+
+nestedInterfaceModifier ::= annotation | accessibilityModifier | _static | _strictfp | _abstract
+
+topLevelInterfaceModifier ::= annotation | _public | _strictfp | _abstract
+
+nestedClassModifier ::= annotation | accessibilityModifier | _static | _strictfp | _final
+
+topLevelClassModifier ::= annotation | _public | _strictfp | _final
+
+nestedAbstractClassModifier ::= annotation | accessibilityModifier | _static | _strictfp
+
+topLevelAbstractClassModifier ::= annotation | _public | _strictfp
+
+interfaceEnumModifier ::= !accessibilityRestricter nestedEnumModifier
+
+interfaceInterfaceModifier ::= !accessibilityRestricter nestedInterfaceModifier
+
+interfaceClassModifier ::= !accessibilityRestricter nestedClassModifier
+
+interfaceAbstractClassModifier ::= !accessibilityRestricter nestedAbstractClassModifier
+
+nestedAbstractClassModifiers ::= nestedAbstractClassModifier* _abstract nestedAbstractClassModifier*
+
+interfaceAbstractClassModifiers ::= interfaceAbstractClassModifier* _abstract interfaceAbstractClassModifier*
+
+topLevelAbstractClassModifiers ::= topLevelAbstractClassModifier* _abstract topLevelAbstractClassModifier*
+
+nestedTypeDeclaration ::= nestedInterfaceModifier* interfaceDeclaration  | nestedInterfaceModifier* annotationTypeDeclaration  | nestedEnumModifier* enumDeclaration  | nestedClassModifier* classDeclaration  | nestedAbstractClassModifiers abstractClassDeclaration
+
+interfaceTypeDeclaration ::= interfaceInterfaceModifier* interfaceDeclaration  | interfaceInterfaceModifier* annotationTypeDeclaration  | interfaceEnumModifier* enumDeclaration  | interfaceClassModifier* classDeclaration  | interfaceAbstractClassModifiers abstractClassDeclaration
+
+topLevelTypeDeclaration ::= semi | topLevelInterfaceModifier* interfaceDeclaration  | topLevelInterfaceModifier* annotationTypeDeclaration  | topLevelEnumModifier* enumDeclaration  | topLevelClassModifier* classDeclaration  | topLevelAbstractClassModifiers abstractClassDeclaration  | macroDefinition
+
+interfaceFieldModifier ::= annotation | _public | _static | _final
+
+interfaceFieldDeclaration ::= interfaceFieldModifier* fieldDeclaration
+
+interfaceMethodModifier ::= annotation | _public | _abstract
+
+interfaceMethodDeclaration ::= interfaceMethodModifier* abstractMethodDeclaration
+
+interfaceMemberDeclaration ::= semi | interfaceMethodDeclaration | interfaceFieldDeclaration | interfaceTypeDeclaration
+
+interfaceBody ::= lCuBra interfaceMemberDeclaration* rCuBra
+
+interfaceDeclaration ::= _interface identifier typeParameters? (_extends classType (comma classType )*  )? interfaceBody
+
+annotationAttributeDeclaration ::= interfaceMethodModifier* type identifier lPar rPar (_default elementValue )? semi
+
+annotationTypeMemberDeclaration ::= semi | annotationAttributeDeclaration | interfaceFieldDeclaration | interfaceTypeDeclaration
+
+annotationTypeBody ::= lCuBra annotationTypeMemberDeclaration* rCuBra
+
+annotationTypeDeclaration ::= at _interface identifier annotationTypeBody
+
+classFieldModifier ::= annotation | accessibilityModifier | _static | _final | _transient | _volatile
+
+classFieldDeclaration ::= classFieldModifier* fieldDeclaration
+
+classMethodModifier ::= annotation | accessibilityModifier | _final | _static | _strictfp | _synchronized | _transient | _volatile
+
+classMethodDeclaration ::= classMethodModifier* methodDeclaration
+
+nativeMethodDeclaration ::= classMethodModifier* _native classMethodModifier* abstractMethodDeclaration
+
+classConstructorDeclaration ::= annotation* accessibilityModifier? annotation* constructorDeclaration
+
+classMemberDeclaration ::= semi | _static? block  | nestedTypeDeclaration | classMethodDeclaration | nativeMethodDeclaration | classConstructorDeclaration | classFieldDeclaration
+
+classBody ::= lCuBra classMemberDeclaration* rCuBra
+
+classDeclaration ::= _class identifier typeParameters? (_extends classType )? (_implements classType (comma classType )*  )? classBody
+
+abstractMethodModifier ::= annotation | _public | _protected
+
+abstractMethodDeclarationWithModifiers ::= abstractMethodModifier* (_abstract abstractMethodModifier* )? abstractMethodDeclaration
+
+abstractClassMemberDeclaration ::= classMemberDeclaration | abstractMethodDeclarationWithModifiers
+
+abstractClassBody ::= lCuBra abstractClassMemberDeclaration* rCuBra
+
+abstractClassDeclaration ::= _class identifier typeParameters? (_extends classType )? (_implements classType (comma classType )*  )? abstractClassBody
+
+enumConstant ::= annotation* identifier arguments? classBody?
+
+enumConstructorDeclaration ::= annotation* (_private annotation* )? constructorDeclaration
+
+enumMemberDeclaration ::= enumConstructorDeclaration | !classConstructorDeclaration abstractClassMemberDeclaration
+
+enumBody ::= lCuBra (enumConstant (comma enumConstant )* )? comma? (semi enumMemberDeclaration* )? rCuBra
+
+enumDeclaration ::= _enum identifier (_implements classType (comma classType )*  )? enumBody
+
+packageDeclaration ::= annotation* _package qualifiedIdentifier semi
+
+importDeclaration ::= _import _static? qualifiedIdentifier (dot star )? semi  | requireDeclaration
+
+prelude ::= spacing packageDeclaration? importDeclaration*
+
+fullPrelude ::= prelude &(_static | _private | _public | _strictfp | _abstract | _final | _class | _interface | _enum | at _interface  | annotation | macro | raw | prioritary | !_)
+
+compilationUnit ::= prelude topLevelTypeDeclaration* !_
+
+\end{lstlisting}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Requires Grammar}
+\label{requires_grammar}
+
+This describes the syntax of \texttt{require} statements in caxap. See the class
+\texttt{grammar.java._D_Requires} for more details and comments.
+
+This is separate from the statements grammar, because \texttt{require}
+statements are not part of the Java language; and separate from the macro
+definitions grammar because the \texttt{require} statement is needed in regular
+source files.
+
+The \texttt{requireDeclaration} rule acts as an alternative to the
+\texttt{importDeclaration} rule.
+
+\hrulefill
+
+\begin{lstlisting}[breaklines=true]
+require ::= "require" !letterOrDigit  spacing
+
+macro ::= "macro" !letterOrDigit  spacing
+
+starryIdentifier ::= qualifiedIdentifier (dot star )?
+
+starryIdentifierOne ::= identifier dot (star | starryIdentifier)
+
+staticRequire ::= require _static starryIdentifierOne (colon (colon (star | starryIdentifier)  | colon? starryIdentifierOne ) )? semi
+
+macroRequire ::= require macro starryIdentifierOne (colon (colon | star | identifier) )? semi
+
+regularRequire ::= require starryIdentifierOne (colon colon? (star | starryIdentifier)? )? semi
+
+requireDeclaration ::= macroRequire | staticRequire | regularRequire
+
+\end{lstlisting}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Macro Definitions Grammar}
+\label{macrodefinitions_grammar}
+
+This describes the syntax of macro definitions in caxap. See the class
+\texttt{grammar.java._E_Macros} for more details and comments.
+
+The \texttt{macroDefinition} rule acts as an alternative to the
+\texttt{topLevelTypeDeclaration} rule.
+
+The \texttt{quotation} rule acts as an alternative to the
+\texttt{unaryExpression} rule.
+
+\hrulefill
+
+\begin{lstlisting}[breaklines=true]
+pegChar ::= !rSqBra ("\\]" | charLiteralNoQuotes)
+
+pegStar ::= "*" ![+]  spacing
+
+pegPlus ::= "+" ![+/]  spacing
+
+charClassParsingExpression ::= "^"? lSqBra (!rSqBra pegChar )* rSqBra
+
+charRangeParsingExpression ::= "^"? lSqBra charLiteralNoQuotes "-" pegChar rSqBra
+
+underscorePasingExpression ::= "_" spacing
+
+literalParsingExpression ::= stringLiteral minus?
+
+referenceParsingExpression ::= identifier
+
+parenParsingExpression ::= lPar parsingExpression rPar
+
+primaryParsingExpression ::= underscorePasingExpression | literalParsingExpression | referenceParsingExpression | charClassParsingExpression | charRangeParsingExpression | parenParsingExpression
+
+suffixParsingExpression ::= primaryParsingExpression (pegStar | pegPlus | qMark)?
+
+starPlus ::= "*+" spacing
+
+plusSlash ::= "+/" spacing
+
+notParsingExpression ::= bang suffixParsingExpression
+
+andParsingExpression ::= and suffixParsingExpression
+
+captureExpression ::= !(letterOrDigit* fspacing ) identifier ":" prefixParsingExpression  | ":" referenceParsingExpression
+
+prefixParsingExpression ::= andParsingExpression | notParsingExpression | captureExpression | suffixParsingExpression
+
+untilParsingExpression ::= prefixParsingExpression starPlus prefixParsingExpression
+
+untilOnceParsingExpression ::= prefixParsingExpression plusPlus prefixParsingExpression
+
+listParsingExpression ::= prefixParsingExpression plusSlash prefixParsingExpression
+
+binaryParsingExpression ::= untilParsingExpression | untilOnceParsingExpression | listParsingExpression | prefixParsingExpression
+
+sequenceParsingExpression ::= binaryParsingExpression+
+
+parsingExpression ::= sequenceParsingExpression (pipe sequenceParsingExpression )*
+
+hash ::= "#" spacing
+
+hashat ::= "#@" spacing
+
+quote ::= "'" spacing
+
+backquote ::= "`" spacing
+
+backslash ::= "\\"
+
+regularUnquotation ::= backslash? hash (unquotation | unaryExpression)
+
+spliceDelimiter ::= (escape | "\\|" | !"|" _ )*
+
+spliceDelimiters ::= "|" spliceDelimiter "|" spliceDelimiter "|" spliceDelimiter "|"
+
+splicePrefix ::= backslash? hashat spliceDelimiters spacing
+
+splice ::= splicePrefix unaryExpression
+
+unquotation ::= regularUnquotation | splice
+
+escapedQEndMarker ::= backslash rSqBra (quote | backquote)
+
+sourceFragment ::= ((!(quotation | unquotation | escapedQEndMarker) !(rSqBra (quote | backquote) ) _  )* (quotation | unquotation | escapedQEndMarker) )* (!(rSqBra (quote | backquote) ) _ )*
+
+simpleQuotation ::= quote identifier lSqBra sourceFragment rSqBra quote
+
+quasiquotation ::= backquote identifier lSqBra sourceFragment rSqBra backquote
+
+quotation ::= simpleQuotation | quasiquotation
+
+insertMarker ::= (splicePrefix | backslash? hash ) parseIntNumber
+
+dynamicSourceFragment ::= ((!insertMarker _ )* insertMarker )* _*
+
+raw ::= "raw" !letterOrDigit  spacing
+
+prioritary ::= "prioritary" !letterOrDigit  spacing
+
+as ::= "as" !letterOrDigit  spacing
+
+under ::= "under" !letterOrDigit  spacing
+
+replaces ::= "replaces" !letterOrDigit  spacing
+
+called ::= "called" !letterOrDigit  spacing
+
+strategy ::= as | under | replaces | called
+
+macroDefinition ::= raw? prioritary? macro identifier strategy identifier? colon parsingExpression (block | semi)
+
+\end{lstlisting}

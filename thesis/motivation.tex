@@ -1,0 +1,372 @@
+\chapter{Motivation}
+\label{motivation_chapter}
+
+Now that we have seen what macros were, I can offer some motivation for the work
+presented in this thesis. In this chapter, I explain why I built a macro system
+on top of Java, and describe what makes this undertaking worthwhile.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Macros in the Wild}
+
+Macros have existed for a long time. The first trace of macros I could find is a
+paper dating back to 1960. \cite{macro_assem} In that paper, professor Douglas
+McIlroy proposes a macro system for an imaginary assembly language. More famous
+is the 1963 paper by Timothy Hart \cite{macrodef} that introduces macros for the
+Lisp language.
+
+Macros have a long history, but tied to languages deemed old and/or obscure by
+most current-day programmers. The history of macros is inextricably linked to
+the history of the Lisp family of languages. Nowadays, Lisp still has its users
+and its proponents, but its market share is negligible.
+
+The highly-debatable - and highly-debated - TIOBE index \cite{tiobe}, which
+ranks programming language by popularity, says that - in July 2013 - Lisp is the
+15th most popular language, with less than 1\% market share. Among the languages
+preceding it in the ranking, none feature procedural or syntactic macros. C,
+along with the derived languages C++ and Objective-C, do however feature
+function-like lexical transformative macros, as described in chapter
+\ref{intro_macros}.
+
+Yet, macros are starting to get back in style. People such as Paul Graham have
+argued for them. Whole books \cite{on_lisp} \cite{let_over_lambda} have been
+written about macro programming. New macro-enabled programming languages are
+starting to emerge, such as Nemerle \cite{nemerle_paper} and Elixir.
+\cite{elixir_macros}
+
+This last point - new languages - is particularly important because the two
+languages I mentioned are not \emph{Lisps}. By ``\emph{Lisps}'' I mean languages
+whose syntax is based on S-expressions. S-expressions are made of nested
+parentheses, identifiers and literals, with no operator precedence to contend
+with. Many people have expressed a dislike of such minimalist syntax. Lisps also
+usually share other characteristics such as dynamic typing and an orientation
+towards functional programming. Those traits do not cater to all tastes.
+
+Yet, if programming language history is any indication, it will take those
+languages ten years to reach the mainstream, assuming they get there at all. The
+odds are not in their favor.
+
+Programming languages take a long time to mature, mostly because the ecosystem
+needs to build up. Libraries have to be written and tooling must be improved.
+
+But couldn't we take another approach? Instead of writing a new programming
+language, we could add macros to an existing programming language. This is the
+approach I have picked, and I hope to demonstrate that it is indeed viable.
+
+Building upon a language is an approach that has worked in the past, albeit not
+yet in the context of macros. The C++ and Objective-C languages both debuted as
+extensions to the C language. The Scala language, while a programming language
+on its own right, has used its full compatibility with Java to jumpstart its
+ecosystem.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Expressiveness of Macros}
+
+Strictly speaking, any language is as powerful as any other, as long as it is
+Turing-complete. But who in his right mind would program using a Turing machine?
+What is it that makes high-level languages preferable to assembly?
+
+I think the answer to this last question is \emph{expressiveness}. A language is
+more expressive than another if there are more ideas or concepts it can express
+tersely.
+
+Macros are valuable because they enable new ideas to be expressed tersely, by
+defining their meaning in terms of old ideas (the macro expansion). Macros are
+fundamentally about manipulating language and increasing expressiveness. Let us
+now see how exactly macros increase expressiveness.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Abstracting More}
+
+If I were to choose two verbs to represent the activity of programming, they
+would be \emph{formalize} and \emph{abstract}.
+
+The job of a programmer is to capture fuzzy requirements and turn them into
+precise unambiguous instructions that can be understood by a computer. Hence,
+formalization has to do with the objective we try to achieve when programming.
+
+Abstracting, on the other hand, is a property of the programming process. Humans
+are very apt at pattern-matching: identifying the common aspects shared by
+different situations, and this ability extends to programming. Programming
+languages give us tools - such as functions and classes - to abstract common
+patterns. The strong focus on abstraction in programming is embodied by the
+acronym \emph{DRY}: Don't Repeat Yourself.
+
+But - and here comes my point - there is a wide range of patterns that
+traditional programming languages are incapable of abstracting.
+
+This is a problem: the more patterns a language can abstract, the more
+expressive it is, since the abstracted pattern is an idea that can be tersely
+reused. By being unable to abstract many usual patterns, some programming
+languages severely restrict their expressiveness.
+
+Figure \ref{pattern_example} illustrates the accessor pattern. This pattern
+consists of providing methods to retrieve and modify an object's attribute,
+which is declared private. The idea is to make the code more maintainable. If
+the representation of the attribute change, or if some code has to be run each
+time the attribute is accessed; that can be done easily by modifying the
+accessor's implementation, without breaking the clients' code. This pattern is
+pervasive in the Java world. Every serious Java program uses it. And yet,
+shockingly, there is no way to abstract it.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[frame=single,language=Java]
+private int thing;
+
+public int getThing() {
+  return thing;
+}
+
+public void setThing(int thing) {
+  this.thing = thing;
+}
+\end{lstlisting}
+\caption{Java code illustrating the accessor pattern.}
+\label{pattern_example}
+\end{figure}
+
+The reason why the accessor pattern can't be abstracted is simple: it deals with
+declarations. In Java, declarations are not first-class, meaning they cannot be
+manipulated by the program.
+
+The solution is then to make declarations first-class. There are essentially two
+ways of doing this. The first one is called meta-programming. A language with
+meta-programming capabilities is able to know and modify the way it behaves at
+run time. For instance, in the Ruby language, you can add attributes and methods
+to a class at run time.
+
+The second approach is to manipulate declarations at compile-time
+exclusively. Macros are an example of this, but, more broadly, I call this
+approach \emph{source rewriting}. With source rewriting, you don't have to
+explicitly make some concepts available as first-class values. You get
+everything the language can do as syntax. You can then manipulate this syntax to
+transform the program as you please.
+
+The file \texttt{examples/src/pkg/Accessor.javam} in the caxap source tree has
+macros abstracting accessors. The file
+\texttt{examples/src/pkg/UseAccessor.java} shows how to use the macros.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Meta-Programming and Source Rewriting}
+
+While both meta-programming and source rewriting can be used to abstract some
+patterns, they are very different beasts.
+
+First, they involve different trade-offs. Meta-programming makes it hard to
+write very performant programs, as allowing some concepts to be manipulated at
+run time generally means introducing an additional level of indirection. Source
+rewriting, on the other hand, does not hurt run-time performance, but adds to
+the compilation time.
+
+Their capabilities also differ. In a meta-programmable language, what you can do
+is always limited by what the language designer has explicitly made
+meta-programmable. In source rewriting, however, they are no explicit
+limitations: you just generate the code you want. You may however be limited by
+the primitives offered by your target language.
+
+On the flip side, meta-programming is generally much more pleasant to use,
+because it has been designed explicitly for manipulation by the user, which
+might not be the case of a programming language's syntax. It was especially not
+on the mind of Java's designers, trust me.
+
+The astute reader might have noticed that, the way we described it, source
+rewriting sounds a lot like writing your own compiler. That's a correct
+observation, and also the reason why source rewriting is not practical in
+general. Writing compilers is hard. The next section explains how caxap makes
+source rewriting practical.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{caxap: Source Rewriting Made Practical}
+
+caxap could be seen as a compiler from the caxap language to the Java
+language. The caxap language consists of three things: the Java language, a few
+hard-coded additions that allow us to define and use macros, and all the
+user-defined extensions.
+
+The value of caxap is that it abstracts away much of the hard work done by a
+compiler and leaves the user with a very simple way to write compiler extensions
+(macros). The main design objective is to do this while staying as general as
+possible, meaning we try to impose as few constraints on the macros as possible.
+
+But caxap aims to go further than that, and to help the user write his
+macros. In particular, caxap provides utilities to work with syntax
+trees. Notably match finding (described in section \ref{match_api}) and
+quasiquotation (described in section \ref{quotation_manual}).
+
+But let's not hide our head in the sand: macros do have a few pitfalls. For
+instance, one must be careful when designing his macros' syntax, to ensure it
+does not clash with the base Java grammar. The point is that macros are a very
+powerful feature, but this power comes at a cost: complexity. caxap aims to
+reduce the power to cost ratio significantly, making a large class of new
+abstractions available with minimal effort.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Targeting the Java Programming Language}
+
+As said earlier, one of my goals with this thesis was to prove that building a
+macro system on top of an existing language was practical.
+
+There were some criteria I wanted the target language to satisfy. First, it
+should be mainstream, i.e. widely used. Second, it shouldn't use S-expressions
+or any other form of simplified syntax. Much of the difficulty of writing a
+macro system for a mainstream language comes from dealing with its complex
+grammar. Third, it should be a language to which macros bring a significant
+improvement. The less expressive the language, the more helpful macros are going
+to be.
+
+In the end, it came down to C vs Java. There were a few reasons that led me to
+choose Java. C has transformative macros which can help in simple cases. While C
+is still widely used on its own, it has derived languages such as C++ which
+improve its expressiveness a lot. C is harder to parse, because some constructs
+are ambiguous until we know which identifiers designate types and which
+designate variables.
+
+You may have noticed that caxap is itself implemented in Java. I expect this
+choice to be questioned, so here is the rationale behind the decision.
+
+First, I wanted a JVM language, because that would allow me to interface with
+the Java compiler API. I wanted something performant, because parsing is quite
+cpu-intensive. This left me with Java and Scala. I picked Java first and
+foremost for the audience. caxap is a tool for Java programmers, and I reasoned
+they were more likely to accept a tool written in a language they are familiar
+with. I also wanted to get a feel of how caxap could be useful in large scale
+Java projects. Finally, it left the possibility of a bootstrapped
+implementation: using caxap in its own implementation. This is not yet the case,
+but it is still something I want to do when the implementation becomes mature
+enough.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Meta-Abstraction}
+
+In computer science, there are two main types of abstraction: control
+abstraction and data abstraction. \cite{wiki_abstraction}
+
+Control abstraction involves making new operations - such as functions - that
+bundle multiple operations together. Data abstraction means making disparate
+bits of data manipulable as a single meaningful entity. It can also mean
+separating the representation of the data from the operations that can be
+performed on it.
+
+In both forms of abstraction, the programming language's syntax is used to
+define new entities: data structures, functions, ... These entities are
+precisely defined by the language's semantics. The syntax is simply used to
+define and refer to these entities.
+
+I posit that macros are a third meaningful form of abstraction. Macros perform
+\emph{meta-abstraction}: with macros, a programming language's syntax is used to
+define and refer to other syntactic constructs. Macros cannot manipulate
+run-time semantic entities. Instead, they manipulate syntactic entities which
+may themselves manipulate run-time semantic entities.
+
+To put it simply, where usual programs manipulate regular values, macros
+manipulate syntax, which is the language used to describe the manipulation of
+values. Said otherwise, macro programming is higher-order programming.
+
+This ability to second guess the language design is, in my humble opinion, very
+valuable. Nobody is cocky enough to claim having found the perfect programming
+language. At any rate, nobody ever made that claim about Java. Inevitably, users
+will wish the language to behave somewhat differently or for it to include more
+features. A powerful macro system may grant some of those wishes.
+
+Let us also note that it is highly doubtful that a single programming language
+could perfectly cater to all needs. The ability to grow a language in any given
+direction allows us to attack particular problems with adapted tools.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Examples}
+
+The \texttt{examples} directory of the source tree has a few examples of what
+can be achieved with caxap. You'll probably understand these examples better
+after perusing the user manual from chapter \ref{manual}.
+
+We reproduce here an interesting example: a macro that introduces \emph{list
+  comprehensions} in Java. List comprehensions are a terse way to build lists
+based on the contents of other iterable sequences. Our implementation imitates
+list comprehensions as featured in the Python programming
+language. \cite{listcomp} They do however take into account the strongly-typed
+nature of Java.
+
+Figure \ref{list_comprehension_def} shows how we define list comprehensions as a
+macro. Figure \ref{list_comprehension_use} shows how the macro is used in
+practice.
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[language=caxap, frame=single]
+package pkg;
+
+require my_util.ListComprehension;
+
+macro ListCompForClause called
+: "for" var:formalParameter "in" iter:expression ("if" cond:expression)? ;
+
+macro ListComprehension as primaryExpression
+: "[" type:referenceType :expression (forClauses:ListCompForClause)+ "]"
+{
+  Match accum = `statement[ list.add(#expression[0]); ]`;
+
+  for (Match clause : forClauses)
+  {
+    Match[] cond = clause.getCaptures("cond");
+
+    if (cond.length > 0) {
+      accum = `statement[ if (#cond[0]) { #accum } ]`;
+    }
+
+    accum = `statement[
+  	  for (#clause.getCaptures("var")[0] : #clause.getCaptures("iter")[0]) {
+  	    #accum
+  	  }
+    ]`;
+  }
+
+  return `primaryExpression[ (new my_util.ListComprehension<#type[0]>() {
+      @Override public java.util.List<#type[0]> getList() {
+        java.util.List<#type[0]> list = new java.util.ArrayList<>();
+        #accum
+        return list;
+      }
+    }.getList())
+  ]`;
+}
+\end{lstlisting}
+\caption{caxap code defining a list comprehension macro.}
+\label{list_comprehension_def}
+\end{figure}
+
+\begin{figure}[here]
+\small
+\begin{lstlisting}[language=Java, frame=single]
+package pkg;
+
+import java.util.List;
+
+require macro pkg.ListComprehension:*;
+
+public class UseListComprehension
+{
+  public static void main(String[] args)
+  {
+    // [ "a", "b", "c" ]
+    System.out.println([String x
+      for String x in new String[]{ "a", "b", "c" } ]);
+
+    // [ "a", "b", "c" ]
+    System.out.println([String x
+      for String x in new String[]{ "a", "", "b", "c", "" } if !x.isEmpty() ]);
+
+    // [ad, bd, cd, ae, be, ce, af, bf, cf]
+    System.out.println([String x + y
+      for String x in new String[]{ "a", "b", "c"}
+      for String y in new String[]{ "d", "e", "f"} ]);
+
+    // [ad, bd, cd, ae, be, ce, af, bf, cf]
+    System.out.println([String x + y
+      for String x in new String[]{ "a", "", "b", "c", "" } if !x.isEmpty()
+      for String y in new String[]{ "d", "", "e", "f", "" } if !y.isEmpty() ]);
+  }
+}
+\end{lstlisting}
+\caption{Java code showcasing the use of the list comprehension macro.}
+\label{list_comprehension_use}
+\end{figure}

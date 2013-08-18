@@ -1,0 +1,11 @@
+package pkg;
+
+/**
+ * An if statement whose condition is negated.
+ */
+
+macro Unless as statement
+: "unless" expr:expression :block
+{
+  return compiler.util.Quoter.dynamicQuote("statement", "if (!(#1)) #2 ", (Object)expr[0], (Object)block[0]);
+}

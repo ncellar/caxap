@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<launchConfiguration type="org.eclipse.jdt.launching.localJavaApplication">
+<listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
+<listEntry value="/caxap/test/main/ParseOpenJDK.java"/>
+</listAttribute>
+<listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
+<listEntry value="1"/>
+</listAttribute>
+<mapAttribute key="org.eclipse.debug.core.preferred_launchers"/>
+<stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="main.ParseOpenJDK"/>
+<stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="caxap"/>
+<stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS" value="-Xms768M -Xmx768M"/>
+</launchConfiguration>
