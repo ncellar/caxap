@@ -1,7 +1,7 @@
 # caxap (v0.1.0) - Sweeten your Java code
 
-caxap is a syntactic macro system on the top of the Java language. It works as a
-source pre-processor.
+caxap is a syntactic macro system working on top of the Java language. It acts
+as a source pre-processor.
 
 "caxap" means "sugar" in russian. It should be pronounced "katchap". (This is
 not the correct russian pronunciation, which sounds more like "zehrer" or
