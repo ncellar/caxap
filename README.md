@@ -3,6 +3,14 @@
 caxap is a syntactic macro system working on top of the Java language. It acts
 as a source pre-processor.
 
+The system is geared towards maximum expressivity. It allows adding arbitrary
+syntax to the Java language, and executing arbitrary Java code at compile-time
+to translate the new syntax to plain Java syntax. The system features, among
+other things, a quasiquotation system.
+
+WARNING: The system is pretty much alpha, and probably contain huge bugs. But if
+you're tempted to give it a spin, I'd love to have your feedback.
+
 "caxap" means "sugar" in russian. It should be pronounced "katchap". (This is
 not the correct russian pronunciation, which sounds more like "zehrer" or
 something.) The name was chosen because caxap adds syntactic sugar on top of
