@@ -244,7 +244,7 @@ input \texttt{a}. The predicate looks ahead to see if the terminal \texttt{a} is
 present and succeeds. Next, the \texttt{a} terminal on the right-hand side
 consumes the terminal from the input.
 
-The rule [\texttt{A ::= \&b ab}] features the not-predicate. It succeeds for
+The rule [\texttt{A ::= \!b ab}] features the not-predicate. It succeeds for
 input \texttt{ab}. The predicate looks ahead to make sure the terminal
 \texttt{b} is not present. It finds the terminal \texttt{a} instead and
 therefore succeeds. The two next terminals on the right-hand side consume the

@@ -249,7 +249,7 @@ package pkg;
 
 class Use {
   public static void main(String[] args) {
-    if (!((false))) {
+    if (!(false)) {
       System.out.println("Hopla boum!");
     }
   }
@@ -1345,12 +1345,12 @@ illustrated in figure \ref{composition_example}.
 \begin{figure}[here]
 \small
 \begin{lstlisting}[frame=single,language=caxap]
-macro Unless as statement
+macro Until as statement
 : "until" expr:expression :block {
   return `statement[ while (!(#expr[0])) #block[0] ]`;
 }
 \end{lstlisting}
-\caption{caxap code defining an \emph{unless} construct (a while loop with a
+\caption{caxap code defining an \emph{until} construct (a while loop with a
   negated condition) as a macro.}
 \label{until_macro}
 \end{figure}

@@ -6,7 +6,7 @@ class UseUnless
 {
   public static void main(String[] args)
   {
-    unless (false) {
+    unless false {
       System.out.println("Hopla boum!");
     }
   }

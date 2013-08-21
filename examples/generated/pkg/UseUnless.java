@@ -4,7 +4,7 @@ class UseUnless
 {
   public static void main(String[] args)
   {
-    if (!((false))) {
+    if (!(false)) {
       System.out.println("Hopla boum!");
     } }
 }
